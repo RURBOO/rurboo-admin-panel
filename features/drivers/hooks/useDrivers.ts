@@ -35,7 +35,8 @@ export function useDrivers() {
         try {
             await updateDoc(doc(db, "drivers", driverId), {
                 status: status,
-                verificationStatus: status === 'active' ? 'approved' : status === 'suspended' ? 'rejected' : 'pending' // Simplified mapping
+                verificationStatus: status === 'active' ? 'approved' : status === 'suspended' ? 'rejected' : 'pending', // Simplified mapping
+                updatedAt: new Date()
             })
         } catch (error) {
             console.error("Error updating driver status:", error)
@@ -43,5 +44,26 @@ export function useDrivers() {
         }
     }
 
-    return { drivers, loading, updateDriverStatus }
+    const updateDriverDocumentStatus = async (
+        driverId: string,
+        docType: string,
+        status: 'approved' | 'rejected',
+        reason?: string
+    ) => {
+        try {
+            const driverRef = doc(db, "drivers", driverId);
+            const key = `documents.${docType}`;
+
+            await updateDoc(driverRef, {
+                [`${key}.status`]: status,
+                [`${key}.updatedAt`]: new Date(),
+                ...(reason ? { [`${key}.rejectionReason`]: reason } : {})
+            });
+        } catch (error) {
+            console.error("Error updating document status:", error);
+            throw error;
+        }
+    };
+
+    return { drivers, loading, updateDriverStatus, updateDriverDocumentStatus }
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
     Table,
     TableBody,
@@ -11,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, ShieldCheck, ShieldAlert } from "lucide-react"
+import { MoreHorizontal, ShieldCheck, ShieldAlert, CheckCircle, XCircle } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,22 +21,144 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useDrivers } from "@/features/drivers/hooks/useDrivers"
 import { exportToCSV } from "@/lib/utils/export"
+import { toast } from "sonner"
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useAuth } from "@/features/auth/AuthContext"
+import { logDriverSuspend, logDriverApprove } from "@/lib/adminActions"
 
 export default function DriversPage() {
-    const { drivers, loading, updateDriverStatus } = useDrivers()
+    const { drivers, loading } = useDrivers()
+    const { user } = useAuth()
+    const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [selectedDriver, setSelectedDriver] = useState<any>(null)
+    const [isDialogOpen, setIsDialogOpen] = useState(false)
+    const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate'>('suspend')
+    const [processing, setProcessing] = useState(false)
 
     const handleExport = () => {
-        exportToCSV(drivers, "rurboo_drivers_export")
+        const dataToExport = statusFilter === "all"
+            ? drivers
+            : drivers.filter(d => d.status === statusFilter)
+        exportToCSV(dataToExport, `rurboo_drivers_${statusFilter}_export`)
+        toast.success(`Exported ${dataToExport.length} drivers`)
     }
 
-    const handleStatusUpdate = async (driverId: string, status: string) => {
+    const openActionDialog = (driverData: any, action: 'suspend' | 'approve' | 'activate') => {
+        setSelectedDriver(driverData)
+        setActionType(action)
+        setIsDialogOpen(true)
+    }
+
+    const handleStatusUpdate = async () => {
+        if (!selectedDriver || !user) return
+
+        setProcessing(true)
         try {
-            await updateDriverStatus(driverId, status)
-            // Optional: Add toast notification here
+            let newStatus = ''
+
+            switch (actionType) {
+                case 'suspend':
+                    newStatus = 'suspended'
+                    break
+                case 'approve':
+                case 'activate':
+                    newStatus = 'active'
+                    break
+            }
+
+            await updateDoc(doc(db, "drivers", selectedDriver.id), {
+                status: newStatus,
+                updatedAt: serverTimestamp(),
+                updatedBy: user.uid
+            })
+
+            // Log the action
+            if (actionType === 'suspend') {
+                await logDriverSuspend(
+                    user.uid,
+                    user.email || "",
+                    selectedDriver.id,
+                    selectedDriver.name || selectedDriver.email,
+                    "Admin action"
+                )
+                toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been suspended`)
+            } else {
+                await logDriverApprove(
+                    user.uid,
+                    user.email || "",
+                    selectedDriver.id,
+                    selectedDriver.name || selectedDriver.email
+                )
+                toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been ${actionType === 'approve' ? 'approved' : 'activated'}`)
+            }
+
+            setIsDialogOpen(false)
+            setSelectedDriver(null)
         } catch (error) {
-            console.error("Failed to update status", error)
+            console.error("Error updating driver status:", error)
+            toast.error("Failed to update driver status. Please try again.")
+        } finally {
+            setProcessing(false)
+        }
+    }
+
+    // Filter drivers based on selected status
+    const filteredDrivers = statusFilter === "all"
+        ? drivers
+        : drivers.filter(d => d.status === statusFilter)
+
+    const getStatusBadge = (status: string, verified: boolean) => {
+        switch (status) {
+            case 'active':
+                return (
+                    <Badge variant="default" className="gap-1 bg-green-600">
+                        <CheckCircle className="h-3 w-3" />
+                        Active
+                    </Badge>
+                )
+            case 'suspended':
+                return (
+                    <Badge variant="destructive" className="gap-1">
+                        <ShieldAlert className="h-3 w-3" />
+                        Suspended
+                    </Badge>
+                )
+            case 'blocked':
+                return (
+                    <Badge variant="destructive" className="gap-1 bg-black">
+                        <XCircle className="h-3 w-3" />
+                        Blocked
+                    </Badge>
+                )
+            case 'pending':
+                return (
+                    <Badge variant="secondary" className="gap-1">
+                        <XCircle className="h-3 w-3" />
+                        Pending
+                    </Badge>
+                )
+            default:
+                return <Badge variant="outline">{status}</Badge>
         }
     }
 
@@ -48,7 +171,19 @@ export default function DriversPage() {
                         Manage driver verification, approval, and account status.
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Filter by status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Drivers ({drivers.length})</SelectItem>
+                            <SelectItem value="active">Active ({drivers.filter(d => d.status === 'active').length})</SelectItem>
+                            <SelectItem value="suspended">Suspended ({drivers.filter(d => d.status === 'suspended').length})</SelectItem>
+                            <SelectItem value="blocked">Blocked ({drivers.filter(d => d.status === 'blocked').length})</SelectItem>
+                            <SelectItem value="pending">Pending ({drivers.filter(d => d.status === 'pending').length})</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <Button variant="outline" onClick={handleExport}>Export CSV</Button>
                     <Button>Add Driver</Button>
                 </div>
@@ -58,57 +193,65 @@ export default function DriversPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[80px]">Image</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>Driver</TableHead>
+                            <TableHead>Phone</TableHead>
                             <TableHead>Vehicle</TableHead>
-                            <TableHead className="text-right">Rating</TableHead>
-                            <TableHead className="w-[80px]"></TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Rating</TableHead>
+                            <TableHead>Total Rides</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">
+                                <TableCell colSpan={7} className="text-center h-24">
                                     Loading drivers...
                                 </TableCell>
                             </TableRow>
-                        ) : drivers.length === 0 ? (
+                        ) : filteredDrivers.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">
-                                    No drivers found.
+                                <TableCell colSpan={7} className="text-center h-24">
+                                    No drivers found for the selected filter.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            drivers.map((driver) => (
+                            filteredDrivers.map((driver) => (
                                 <TableRow key={driver.id}>
                                     <TableCell>
-                                        <Avatar>
-                                            <AvatarImage src="/avatars/01.png" alt={driver.name} />
-                                            <AvatarFallback>{driver.name ? driver.name.charAt(0).toUpperCase() : 'D'}</AvatarFallback>
-                                        </Avatar>
+                                        <div className="flex items-center gap-3">
+                                            <Avatar>
+                                                <AvatarImage src={driver.photoURL} />
+                                                <AvatarFallback>{driver.name?.charAt(0) || "D"}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="font-medium">{driver.name || "N/A"}</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {driver.verified && (
+                                                        <span className="flex items-center gap-1">
+                                                            <ShieldCheck className="h-3 w-3 text-blue-600" />
+                                                            Verified
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </TableCell>
+                                    <TableCell>{driver.phoneNumber || "N/A"}</TableCell>
                                     <TableCell>
-                                        <div className="font-medium">{driver.name || 'Unknown Name'}</div>
-                                        <div className="text-sm text-muted-foreground">{driver.email || 'No Email'}</div>
+                                        <div>
+                                            <div className="font-medium">{driver.vehicleType || "N/A"}</div>
+                                            <div className="text-sm text-muted-foreground">{driver.vehicleNumber || ""}</div>
+                                        </div>
                                     </TableCell>
+                                    <TableCell>{getStatusBadge(driver.status, driver.verified || false)}</TableCell>
                                     <TableCell>
-                                        <Badge variant={
-                                            driver.status === 'active' ? 'default' :
-                                                driver.status === 'suspended' ? 'destructive' : 'secondary'
-                                        }>
-                                            {driver.status === 'suspended' && (driver as any).suspensionReason?.includes('Automated')
-                                                ? 'Auto-Suspended'
-                                                : driver.status}
-                                        </Badge>
+                                        <div className="flex items-center gap-1">
+                                            ⭐ {driver.rating?.toFixed(1) || "N/A"}
+                                        </div>
                                     </TableCell>
-                                    <TableCell>
-                                        {driver.vehicleDetails ?
-                                            `${driver.vehicleDetails.model} (${driver.vehicleDetails.number})` :
-                                            'No Vehicle'}
-                                    </TableCell>
-                                    <TableCell className="text-right">{driver.rating && driver.rating > 0 ? driver.rating : 'N/A'}</TableCell>
-                                    <TableCell>
+                                    <TableCell>{driver.totalRides || 0}</TableCell>
+                                    <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -118,29 +261,115 @@ export default function DriversPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>View Profile</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => window.location.href = `/dashboard/drivers/${driver.id}`}>View Profile</DropdownMenuItem>
                                                 <DropdownMenuItem>View Documents</DropdownMenuItem>
+                                                <DropdownMenuItem>View Ride History</DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                    className="text-green-600 cursor-pointer"
-                                                    onClick={() => handleStatusUpdate(driver.id, 'active')}
-                                                >
-                                                    <ShieldCheck className="mr-2 h-4 w-4" /> Approve
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    className="text-red-600 cursor-pointer"
-                                                    onClick={() => handleStatusUpdate(driver.id, 'suspended')}
-                                                >
-                                                    <ShieldAlert className="mr-2 h-4 w-4" /> Suspend
-                                                </DropdownMenuItem>
+                                                {driver.status === 'pending' && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => openActionDialog(driver, 'approve')}
+                                                        className="text-green-600"
+                                                    >
+                                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                                        Approve Driver
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {driver.status === 'suspended' && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => openActionDialog(driver, 'activate')}
+                                                        className="text-green-600"
+                                                    >
+                                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                                        Activate Driver
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {driver.status === 'active' && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => openActionDialog(driver, 'suspend')}
+                                                        className="text-destructive"
+                                                    >
+                                                        <ShieldAlert className="mr-2 h-4 w-4" />
+                                                        Suspend Driver
+                                                    </DropdownMenuItem>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
-                            )))}
+                            ))
+                        )}
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Confirmation Dialog */}
+            <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            {actionType === 'suspend' ? (
+                                <>
+                                    <ShieldAlert className="h-5 w-5 text-destructive" />
+                                    Suspend Driver
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                    {actionType === 'approve' ? 'Approve Driver' : 'Activate Driver'}
+                                </>
+                            )}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {actionType === 'suspend' ? (
+                                <>
+                                    Are you sure you want to suspend <strong>{selectedDriver?.name || selectedDriver?.email}</strong>?
+                                    <br /><br />
+                                    Suspended drivers will:
+                                    <ul className="list-disc list-inside mt-2 space-y-1">
+                                        <li>Not be able to accept new rides</li>
+                                        <li>Not appear in availability searches</li>
+                                        <li>Not have access to the driver app</li>
+                                    </ul>
+                                    <br />
+                                    This action will be logged in the admin audit trail.
+                                </>
+                            ) : actionType === 'approve' ? (
+                                <>
+                                    Are you sure you want to approve <strong>{selectedDriver?.name || selectedDriver?.email}</strong>?
+                                    <br /><br />
+                                    This driver will:
+                                    <ul className="list-disc list-inside mt-2 space-y-1">
+                                        <li>Get access to the driver app</li>
+                                        <li>Be able to accept ride requests</li>
+                                        <li>Appear in user searches based on vehicle type</li>
+                                    </ul>
+                                    <br />
+                                    Make sure you've verified all documents before approving.
+                                </>
+                            ) : (
+                                <>
+                                    Are you sure you want to activate <strong>{selectedDriver?.name || selectedDriver?.email}</strong>?
+                                    <br /><br />
+                                    This will restore full driver access and allow them to accept rides again.
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleStatusUpdate}
+                            disabled={processing}
+                            className={actionType === 'suspend' ? 'bg-destructive hover:bg-destructive/90' : 'bg-green-600 hover:bg-green-700'}
+                        >
+                            {processing ? 'Processing...' : (
+                                actionType === 'suspend' ? 'Suspend Driver' :
+                                    actionType === 'approve' ? 'Approve Driver' : 'Activate Driver'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

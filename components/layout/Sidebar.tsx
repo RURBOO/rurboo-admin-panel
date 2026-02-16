@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -13,7 +14,8 @@ import {
     ShieldAlert,
     Menu,
     X,
-    MessageSquare
+    MessageSquare,
+    Bell
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -64,6 +66,18 @@ const routes = [
         color: "text-blue-600",
     },
     {
+        label: "Notifications",
+        icon: Bell,
+        href: "/dashboard/notifications",
+        color: "text-purple-600",
+    },
+    {
+        label: "Feedback",
+        icon: MessageSquare, // Alternatively could use MessageCircle or similar
+        href: "/dashboard/feedback",
+        color: "text-indigo-600",
+    },
+    {
         label: "Risk & SOS",
         icon: ShieldAlert,
         href: "/dashboard/risk",
@@ -103,9 +117,19 @@ export function AppSidebar() {
             )}>
                 <div className="px-3 py-2 flex-1">
                     <Link href="/dashboard" className="flex items-center pl-3 mb-14">
-                        <h1 className="text-2xl font-bold">
-                            Rurboo <span className="text-primary">Admin</span>
-                        </h1>
+                        <div className="p-6">
+                            <div className="flex items-center gap-2 font-bold text-2xl mb-8 text-white">
+                                <div className="relative h-10 w-32 rounded-md overflow-hidden bg-white/10 p-1">
+                                    <Image
+                                        src="/logo.jpg"
+                                        alt="Rurboo Logo"
+                                        fill
+                                        className="object-contain"
+                                        priority
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </Link>
                     <div className="space-y-1">
                         <div className="space-y-1">

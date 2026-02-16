@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, CreditCard, Users, RefreshCw, TrendingUp, Calendar } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Car, CreditCard, Users, RefreshCw, TrendingUp, Calendar, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useDashboardStats } from "@/features/dashboard/hooks/useDashboardStats"
 import { useVehicleRideStats } from "@/features/dashboard/hooks/useVehicleRideStats"
 import { useUserOnboarding, TimePeriod } from "@/features/dashboard/hooks/useUserOnboarding"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
     Select,
     SelectContent,
@@ -15,9 +16,10 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function DashboardPage() {
-    const { totalRevenue, activeDrivers, totalUsers, activeRides, loading } = useDashboardStats()
+    const { totalRevenue, activeDrivers, totalUsers, activeRides, revenueData, loading } = useDashboardStats()
     const { totalRides, todayRides, vehicleStats, loading: ridesLoading } = useVehicleRideStats()
     const [onboardingPeriod, setOnboardingPeriod] = useState<TimePeriod>('daily')
     const { data: onboardingData, totalInPeriod, loading: onboardingLoading } = useUserOnboarding(onboardingPeriod)
@@ -47,35 +49,41 @@ export default function DashboardPage() {
     const stats = [
         {
             title: "Total Revenue",
-            value: loading ? "Loading..." : formatCurrency(totalRevenue),
+            value: formatCurrency(totalRevenue),
             change: "From completed rides",
             icon: CreditCard,
         },
         {
             title: "Active Drivers",
-            value: loading ? "..." : activeDrivers.toString(),
+            value: activeDrivers.toString(),
             change: "Verified & online",
             icon: Car,
         },
         {
             title: "Total Users",
-            value: loading ? "..." : totalUsers.toString(),
+            value: totalUsers.toString(),
             change: "Registered riders",
             icon: Users,
         },
         {
             title: "Active Rides",
-            value: loading ? "..." : activeRides.toString(),
+            value: activeRides.toString(),
             change: "Currently on-trip",
             icon: RefreshCw,
         },
     ]
 
     return (
-        <div className="p-8 space-y-8">
+        <div className="p-8 space-y-8 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-                <Button>Download Report</Button>
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                    <p className="text-muted-foreground mt-1">Overview of your platform's performance.</p>
+                </div>
+                <Button>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Report
+                </Button>
             </div>
 
             {/* Main Stats Cards */}
@@ -89,7 +97,11 @@ export default function DashboardPage() {
                             <stat.icon className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stat.value}</div>
+                            {loading ? (
+                                <Skeleton className="h-8 w-1/2 mb-1" />
+                            ) : (
+                                <div className="text-2xl font-bold">{stat.value}</div>
+                            )}
                             <p className="text-xs text-muted-foreground">
                                 {stat.change}
                             </p>
@@ -98,176 +110,204 @@ export default function DashboardPage() {
                 ))}
             </div>
 
-            {/* Rides Statistics */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <RefreshCw className="h-5 w-5" />
-                        Ride Statistics
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="overview" className="w-full">
-                        <TabsList>
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="vehicles">By Vehicle</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="overview" className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Card>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                                            Total Rides
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-3xl font-bold">
-                                            {ridesLoading ? "..." : totalRides.toLocaleString()}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-1">All time</p>
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                                            Today's Rides
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-3xl font-bold text-green-600">
-                                            {ridesLoading ? "..." : todayRides.toLocaleString()}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-1">Since midnight</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="vehicles">
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {vehicleStats.map((vehicle) => (
-                                    <Card key={vehicle.vehicleType}>
-                                        <CardHeader className="pb-2">
-                                            <CardTitle className="text-sm font-medium">
-                                                {formatVehicleType(vehicle.vehicleType)}
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-2">
-                                                <div>
-                                                    <div className="text-xs text-muted-foreground">Total Rides</div>
-                                                    <div className="text-2xl font-bold">
-                                                        {ridesLoading ? "..." : vehicle.totalRides.toLocaleString()}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-xs text-muted-foreground">Today's Rides</div>
-                                                    <div className="text-xl font-bold text-green-600">
-                                                        {ridesLoading ? "..." : vehicle.todayRides.toLocaleString()}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
-
-            {/* User Onboarding Analytics */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                            <TrendingUp className="h-5 w-5" />
-                            User Onboarding Analytics
-                        </CardTitle>
-                        <Select value={onboardingPeriod} onValueChange={(value) => setOnboardingPeriod(value as TimePeriod)}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Select period" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="daily">Daily</SelectItem>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="3months">3 Months</SelectItem>
-                                <SelectItem value="6months">6 Months</SelectItem>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <div className="flex-1">
-                                <div className="text-sm text-muted-foreground">Total New Users in Period</div>
-                                <div className="text-3xl font-bold">
-                                    {onboardingLoading ? "..." : totalInPeriod.toLocaleString()}
-                                </div>
-                            </div>
-                            <Calendar className="h-12 w-12 text-muted-foreground" />
-                        </div>
-
-                        {/* Simple data display */}
-                        <div className="grid gap-2">
-                            <div className="text-sm font-medium">Recent Activity:</div>
-                            {onboardingLoading ? (
-                                <div className="text-sm text-muted-foreground">Loading...</div>
-                            ) : onboardingData.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">No data available for this period</div>
-                            ) : (
-                                <div className="grid gap-1 max-h-[200px] overflow-y-auto">
-                                    {onboardingData.slice(-10).reverse().map((item, idx) => (
-                                        <div key={idx} className="flex items-center justify-between text-sm border-b pb-1">
-                                            <span className="text-muted-foreground">{item.date}</span>
-                                            <span className="font-medium">{item.count} users</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Live Stats (existing) */}
+            {/* Revenue & Live Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="col-span-4">
                     <CardHeader>
                         <CardTitle>Revenue Overview</CardTitle>
+                        <CardDescription>
+                            Daily revenue for the last 7 days.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                            Revenue Chart (Coming Soon)
-                        </div>
+                        {loading ? (
+                            <Skeleton className="h-[300px] w-full" />
+                        ) : (
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={revenueData}>
+                                        <defs>
+                                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+                                        <XAxis
+                                            dataKey="date"
+                                            stroke="#888888"
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                        />
+                                        <YAxis
+                                            stroke="#888888"
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(value) => `₹${value}`}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }}
+                                            formatter={(value) => [`₹${value}`, 'Revenue']}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="value"
+                                            stroke="#10b981"
+                                            fillOpacity={1}
+                                            fill="url(#colorRevenue)"
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
                 <Card className="col-span-3">
                     <CardHeader>
                         <CardTitle>Live Stats</CardTitle>
-                        <div className="text-sm text-muted-foreground">
-                            Real-time platform metrics
+                        <CardDescription>
+                            Real-time platform metrics.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Active Drivers</span>
+                                {loading ? <Skeleton className="h-6 w-12" /> : <span className="text-2xl font-bold text-green-600">{activeDrivers}</span>}
+                            </div>
+                            <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${(activeDrivers / 100) * 100}%` }} />
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Live Rides</span>
+                                {loading ? <Skeleton className="h-6 w-12" /> : <span className="text-2xl font-bold text-blue-600">{activeRides}</span>}
+                            </div>
+                            <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(activeRides / (activeDrivers || 1)) * 100}%` }} />
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Total Registered Users</span>
+                                {loading ? <Skeleton className="h-6 w-12" /> : <span className="text-2xl font-bold text-purple-600">{totalUsers}</span>}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Bottom Section: Rides & Onboarding */}
+            <div className="grid gap-4 md:grid-cols-7">
+                {/* User Onboarding Analytics */}
+                <Card className="col-span-3">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <TrendingUp className="h-5 w-5" />
+                                User Growth
+                            </CardTitle>
+                            <Select value={onboardingPeriod} onValueChange={(value) => setOnboardingPeriod(value as TimePeriod)}>
+                                <SelectTrigger className="w-[120px]">
+                                    <SelectValue placeholder="Period" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="daily">Daily</SelectItem>
+                                    <SelectItem value="weekly">Weekly</SelectItem>
+                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Active Drivers</span>
-                                <span className="text-2xl font-bold text-green-600">{loading ? "..." : activeDrivers}</span>
+                            <div className="flex items-center gap-4">
+                                <div className="flex-1">
+                                    <div className="text-sm text-muted-foreground">New Users ({onboardingPeriod})</div>
+                                    {onboardingLoading ? (
+                                        <Skeleton className="h-8 w-20 mt-1" />
+                                    ) : (
+                                        <div className="text-3xl font-bold">
+                                            {totalInPeriod.toLocaleString()}
+                                        </div>
+                                    )}
+                                </div>
+                                <Calendar className="h-8 w-8 text-muted-foreground opacity-50" />
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Live Rides</span>
-                                <span className="text-2xl font-bold text-blue-600">{loading ? "..." : activeRides}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Total Users</span>
-                                <span className="text-2xl font-bold text-purple-600">{loading ? "..." : totalUsers}</span>
+
+                            <div className="grid gap-2">
+                                <div className="text-sm font-medium">Recent Activity:</div>
+                                {onboardingLoading ? (
+                                    <div className="space-y-2">
+                                        <Skeleton className="h-6 w-full" />
+                                        <Skeleton className="h-6 w-full" />
+                                    </div>
+                                ) : onboardingData.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground">No data available</div>
+                                ) : (
+                                    <div className="grid gap-1 max-h-[150px] overflow-y-auto pr-1">
+                                        {onboardingData.slice(-5).reverse().map((item, idx) => (
+                                            <div key={idx} className="flex items-center justify-between text-sm border-b border-border/50 last:border-0 pb-2">
+                                                <span className="text-muted-foreground">{item.date}</span>
+                                                <span className="font-medium bg-secondary px-2 py-0.5 rounded text-xs">{item.count} users</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
+                    </CardContent>
+                </Card>
+
+                {/* Ride Stats Tab */}
+                <Card className="col-span-4">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <RefreshCw className="h-5 w-5" />
+                            Ride Operations
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <Tabs defaultValue="overview" className="w-full">
+                            <TabsList className="mb-4">
+                                <TabsTrigger value="overview">Overview</TabsTrigger>
+                                <TabsTrigger value="vehicles">Vehicle Breakdown</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="overview" className="space-y-4">
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-medium text-muted-foreground">Total Lifetime Rides</h4>
+                                        {ridesLoading ? <Skeleton className="h-8 w-24" /> : <div className="text-3xl font-bold">{totalRides.toLocaleString()}</div>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-medium text-muted-foreground">Rides Today</h4>
+                                        {ridesLoading ? <Skeleton className="h-8 w-24" /> : <div className="text-3xl font-bold text-green-600">{todayRides.toLocaleString()}</div>}
+                                    </div>
+                                </div>
+                            </TabsContent>
+
+                            <TabsContent value="vehicles">
+                                <div className="grid gap-4 md:grid-cols-3">
+                                    {ridesLoading ? (
+                                        Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
+                                    ) : (
+                                        vehicleStats.slice(0, 6).map((vehicle) => (
+                                            <div key={vehicle.vehicleType} className="bg-secondary/50 p-3 rounded-lg border">
+                                                <div className="text-xs font-medium text-muted-foreground mb-1 truncate" title={formatVehicleType(vehicle.vehicleType)}>
+                                                    {formatVehicleType(vehicle.vehicleType)}
+                                                </div>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-lg font-bold">{vehicle.totalRides}</span>
+                                                    <span className="text-[10px] text-muted-foreground">total</span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
             </div>

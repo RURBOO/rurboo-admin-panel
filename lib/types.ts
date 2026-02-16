@@ -5,19 +5,43 @@ export interface Driver {
     name: string;
     email: string;
     phoneNumber?: string;
+    photoURL?: string;
     role?: string; // 'rider', 'admin', 'driver'
     rating?: number;
     totalRides?: number;
     status: 'active' | 'pending' | 'suspended' | 'blocked';
     verificationStatus?: 'approved' | 'pending' | 'rejected';
+    verified?: boolean;
     vehicleDetails?: {
         model: string;
         number: string;
         type: string;
     };
+    vehicleType?: string;
+    vehicleNumber?: string;
+    vehicleModel?: string;
+    vehicleColor?: string;
+    licenseNumber?: string;
+    address?: string; // Added address
     isActive?: boolean;
+    isOnline?: boolean;
     walletBalance?: number;
     createdAt?: Timestamp;
+    currentLocation?: {
+        latitude: number;
+        longitude: number;
+        lastUpdated?: Timestamp;
+    };
+    updatedAt?: Timestamp;
+    updatedBy?: string;
+    documents?: {
+        [key: string]: {
+            url: string;
+            status: 'pending' | 'approved' | 'rejected';
+            updatedAt?: Timestamp;
+            rejectionReason?: string;
+        }
+    };
 }
 
 export interface User {
@@ -25,10 +49,15 @@ export interface User {
     name: string;
     email: string;
     phoneNumber?: string;
+    photoURL?: string;
     role?: string; // e.g. 'rider', 'admin'
     rating?: number;
     totalRides?: number;
     isBlocked?: boolean;
+    blockedBy?: string | null;
+    blockedAt?: Timestamp | null;
+    blockedReason?: string | null;
+    walletBalance?: number; // Added walletBalance
     createdAt?: Timestamp;
 }
 
