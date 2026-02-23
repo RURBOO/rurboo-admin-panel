@@ -9,6 +9,9 @@ export type AdminActionType =
     | 'create_admin'
     | 'delete_admin'
     | 'update_pricing'
+    | 'wallet_adjustment'
+    | 'document_verify'
+    | 'document_reject'
 
 export interface AdminActionLog {
     adminId: string
@@ -100,5 +103,55 @@ export async function logDriverApprove(
         targetType: 'driver',
         targetId: driverId,
         targetName: driverName
+    })
+}
+
+export async function logWalletAdjustment(
+    adminId: string,
+    adminEmail: string,
+    targetType: 'user' | 'driver',
+    targetId: string,
+    targetName: string,
+    amount: number,
+    type: 'recharge' | 'deduct',
+    reason?: string
+): Promise<void> {
+    await logAdminAction({
+        adminId,
+        adminEmail,
+        action: 'wallet_adjustment',
+        targetType,
+        targetId,
+        targetName,
+        reason,
+        metadata: {
+            amount,
+            type,
+            adjustmentType: type
+        }
+    })
+}
+
+export async function logDocumentVerification(
+    adminId: string,
+    adminEmail: string,
+    driverId: string,
+    driverName: string,
+    docType: string,
+    status: 'verify' | 'reject',
+    reason?: string
+): Promise<void> {
+    await logAdminAction({
+        adminId,
+        adminEmail,
+        action: status === 'verify' ? 'document_verify' : 'document_reject',
+        targetType: 'driver',
+        targetId: driverId,
+        targetName: driverName,
+        reason,
+        metadata: {
+            docType,
+            status
+        }
     })
 }

@@ -92,9 +92,9 @@ service cloud.firestore {
       allow update: if isDriver()
         && uid() == driverId
         && (
-           // Allow updating location/status and CURRENTLOCATION for live tracking
+           // Allow updating location/status, CURRENTLOCATION, and FCM tokens
            request.resource.data.diff(resource.data).changedKeys()
-            .hasOnly(["location", "currentLocation", "isOnline", "lastActive", "heading"]) ||
+            .hasOnly(["location", "currentLocation", "isOnline", "lastActive", "heading", "speed", "lastLocationUpdate", "fcmToken", "lastTokenUpdate", "totalRides", "dailyCommissionDue"]) ||
            // Allow initial setup
            resource.data.status == 'pending'
         );
@@ -102,6 +102,18 @@ service cloud.firestore {
       // Admins can fully manage drivers
       allow create, delete: if isAdmin();
       allow update: if isAdmin();
+      
+      // Allow driver to manage their vehicles
+      match /vehicles/{vehicleId} {
+        allow read: if isAuthenticated() && (uid() == driverId || isAdmin());
+        allow write: if isAuthenticated() && (uid() == driverId || isAdmin());
+      }
+      
+      // Allow driver to write to their earnings
+      match /earnings/{earningId} {
+        allow read: if isAuthenticated() && (uid() == driverId || isAdmin());
+        allow create: if isAuthenticated() && uid() == driverId;
+      }
     }
 
     // =========================================================
@@ -129,18 +141,23 @@ service cloud.firestore {
 
         // USER CAN CANCEL
         (uid() == resource.data.userId &&
-         resource.data.status in ["pending", "scheduled", "driver_accepted"] &&
+         resource.data.status in ["pending", "scheduled", "accepted"] &&
          request.resource.data.status == "cancelled") ||
+
+        // USER APPROVES/REJECTS EARLY END RIDE
+        (uid() == resource.data.userId &&
+         resource.data.status == "in_progress" &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endRideApproved', 'endRideRejected', 'endRideRequested'])) ||
 
         // DRIVER ACCEPTS
         // Any driver can accept a pending ride
         (resource.data.status == "pending" &&
-         request.resource.data.status == "driver_accepted" && 
+         request.resource.data.status == "accepted" && 
          request.resource.data.driverId == uid()) ||
 
         // DRIVER UPDATES STATUS
         (uid() == resource.data.driverId &&
-         request.resource.data.status in ["arrived", "started", "completed"]) ||
+         request.resource.data.status in ["accepted", "arrived", "in_progress", "started", "completed", "cancelled"]) ||
 
         // ADMIN OVERRIDE
         isAdmin()

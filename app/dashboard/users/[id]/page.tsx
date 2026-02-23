@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { User } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Phone, Mail, MapPin, Calendar, CreditCard, Ban } from "lucide-react"
+import { ArrowLeft, Phone, Mail, MapPin, Calendar, CreditCard, Ban, CheckCircle, Plus, Minus } from "lucide-react"
+import { useUsers } from "@/features/users/hooks/useUsers"
+import { useAuth } from "@/features/auth/AuthContext"
+import { logUserBlock, logUserUnblock, logWalletAdjustment } from "@/lib/adminActions"
+import { toast } from "sonner"
 
 export default function UserDetailPage() {
+    const { toggleBlockUser, updateWalletBalance } = useUsers()
+    const { user: admin } = useAuth()
     const params = useParams()
     const router = useRouter()
     const userId = params.id as string
@@ -21,6 +27,7 @@ export default function UserDetailPage() {
     const [loading, setLoading] = useState(true)
     const [rides, setRides] = useState<any[]>([])
     const [loadingRides, setLoadingRides] = useState(true)
+    const [processing, setProcessing] = useState(false)
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -40,7 +47,7 @@ export default function UserDetailPage() {
 
         const fetchRides = async () => {
             try {
-                const ridesRef = collection(db, "rides")
+                const ridesRef = collection(db, "rideRequests")
                 const q = query(
                     ridesRef,
                     where("userId", "==", userId),
@@ -119,8 +126,30 @@ export default function UserDetailPage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant={user.isBlocked ? "outline" : "destructive"}>
-                        {user.isBlocked ? "Unblock Account" : "Block Account"}
+                    <Button
+                        variant={user.isBlocked ? "outline" : "destructive"}
+                        disabled={processing}
+                        onClick={async () => {
+                            if (!admin) return
+                            setProcessing(true)
+                            try {
+                                await toggleBlockUser(user.id, user.isBlocked || false)
+                                if (user.isBlocked) {
+                                    await logUserUnblock(admin.uid, admin.email || "", user.id, user.name || "N/A")
+                                    toast.success("User unblocked successfully")
+                                } else {
+                                    await logUserBlock(admin.uid, admin.email || "", user.id, user.name || "N/A", "Admin Action")
+                                    toast.warning("User blocked successfully")
+                                }
+                                setUser(prev => prev ? ({ ...prev, isBlocked: !prev.isBlocked }) : null)
+                            } catch (e) {
+                                toast.error("Failed to update user status")
+                            } finally {
+                                setProcessing(false)
+                            }
+                        }}
+                    >
+                        {processing ? "Processing..." : (user.isBlocked ? "Unblock Account" : "Block Account")}
                     </Button>
                 </div>
             </div>
@@ -150,14 +179,98 @@ export default function UserDetailPage() {
                 {/* Wallet Info */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Wallet & Payments</CardTitle>
+                        <CardTitle className="flex items-center justify-between">
+                            <span>Wallet & Payments</span>
+                            <Badge variant="outline" className="bg-blue-50">₹</Badge>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Wallet Balance</span>
                             <div className="font-bold text-2xl">₹{user.walletBalance?.toFixed(2) || "0.00"}</div>
                         </div>
-                        <div className="flex items-center gap-3 mt-4">
+
+                        <div className="flex gap-2 pt-2">
+                            <Button
+                                size="sm"
+                                className="flex-1 bg-green-600 hover:bg-green-700"
+                                disabled={processing}
+                                onClick={async () => {
+                                    const amountStr = prompt("Enter amount to recharge (₹):")
+                                    const amount = parseFloat(amountStr || "0")
+                                    if (isNaN(amount) || amount <= 0) return
+
+                                    if (!admin) return
+                                    setProcessing(true)
+                                    try {
+                                        await updateWalletBalance(user.id, amount, 'recharge')
+
+                                        // Create Ledger Entry
+                                        await addDoc(collection(db, "ledger_entries"), {
+                                            amount,
+                                            type: 'credit',
+                                            account: 'user_wallet',
+                                            userId: user.id,
+                                            description: `Admin Recharge: ${amount}`,
+                                            timestamp: serverTimestamp(),
+                                            adminId: admin.uid
+                                        })
+
+                                        await logWalletAdjustment(admin.uid, admin.email || "", 'user', user.id, user.name || "N/A", amount, 'recharge')
+
+                                        setUser(prev => prev ? ({ ...prev, walletBalance: (prev.walletBalance || 0) + amount }) : null)
+                                        toast.success(`Recharged ₹${amount} successfully`)
+                                    } catch (e) {
+                                        toast.error("Recharge failed")
+                                    } finally {
+                                        setProcessing(false)
+                                    }
+                                }}
+                            >
+                                <Plus className="mr-1 h-3 w-3" /> Recharge
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-red-600 hover:text-red-700"
+                                disabled={processing}
+                                onClick={async () => {
+                                    const amountStr = prompt("Enter amount to deduct (₹):")
+                                    const amount = parseFloat(amountStr || "0")
+                                    if (isNaN(amount) || amount <= 0) return
+
+                                    if (!admin) return
+                                    setProcessing(true)
+                                    try {
+                                        await updateWalletBalance(user.id, amount, 'deduct')
+
+                                        // Create Ledger Entry
+                                        await addDoc(collection(db, "ledger_entries"), {
+                                            amount,
+                                            type: 'debit',
+                                            account: 'user_wallet',
+                                            userId: user.id,
+                                            description: `Admin Deduction: ${amount}`,
+                                            timestamp: serverTimestamp(),
+                                            adminId: admin.uid
+                                        })
+
+                                        await logWalletAdjustment(admin.uid, admin.email || "", 'user', user.id, user.name || "N/A", amount, 'deduct')
+
+                                        setUser(prev => prev ? ({ ...prev, walletBalance: (prev.walletBalance || 0) - amount }) : null)
+                                        toast.error(`Deducted ₹${amount} successfully`)
+                                    } catch (e) {
+                                        toast.error("Deduction failed")
+                                    } finally {
+                                        setProcessing(false)
+                                    }
+                                }}
+                            >
+                                <Minus className="mr-1 h-3 w-3" /> Deduct
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-2">
                             <CreditCard className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm">Default Payment: Cash</span>
                         </div>

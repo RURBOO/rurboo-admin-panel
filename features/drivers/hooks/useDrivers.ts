@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, doc, updateDoc } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
 
@@ -65,5 +65,24 @@ export function useDrivers() {
         }
     };
 
-    return { drivers, loading, updateDriverStatus, updateDriverDocumentStatus }
+    const updateWalletBalance = async (driverId: string, amount: number, type: 'recharge' | 'deduct') => {
+        try {
+            const driverRef = doc(db, "drivers", driverId)
+            const driverSnap = await getDoc(driverRef)
+            if (!driverSnap.exists()) throw new Error("Driver not found")
+
+            const currentBalance = driverSnap.data().walletBalance || 0
+            const newBalance = type === 'recharge' ? currentBalance + amount : currentBalance - amount
+
+            await updateDoc(driverRef, {
+                walletBalance: newBalance,
+                updatedAt: serverTimestamp()
+            })
+        } catch (error) {
+            console.error("Error updating driver wallet:", error)
+            throw error
+        }
+    }
+
+    return { drivers, loading, updateDriverStatus, updateDriverDocumentStatus, updateWalletBalance }
 }

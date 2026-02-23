@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
+import { useAuth } from "@/features/auth/AuthContext"
+import { logDriverSuspend, logDriverApprove, logWalletAdjustment, logDocumentVerification } from "@/lib/adminActions"
+import { toast } from "sonner"
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Phone, Mail, Car, MapPin, Calendar, Star, ShieldCheck, FileText } from "lucide-react"
+import { ArrowLeft, Phone, Mail, Car, MapPin, Calendar, Star, ShieldCheck, FileText, Plus, Minus, CreditCard } from "lucide-react"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -25,7 +28,8 @@ import {
 import { useDrivers } from "@/features/drivers/hooks/useDrivers"
 
 export default function DriverDetailPage() {
-    const { updateDriverStatus, updateDriverDocumentStatus } = useDrivers()
+    const { updateDriverStatus, updateDriverDocumentStatus, updateWalletBalance } = useDrivers()
+    const { user: admin } = useAuth()
     const params = useParams()
     const router = useRouter()
     const driverId = params.id as string
@@ -44,14 +48,24 @@ export default function DriverDetailPage() {
     }
 
     const handleStatusUpdate = async () => {
-        if (!driver) return
+        if (!driver || !admin) return
         setProcessingAction(true)
         try {
             await updateDriverStatus(driver.id, actionType)
+
+            if (actionType === 'suspended' || actionType === 'blocked') {
+                await logDriverSuspend(admin.uid, admin.email || "", driver.id, driver.name || "N/A", "Admin Action")
+                toast.warning(`Driver ${actionType} successfully`)
+            } else {
+                await logDriverApprove(admin.uid, admin.email || "", driver.id, driver.name || "N/A")
+                toast.success("Driver activated successfully")
+            }
+
             setDriver(prev => prev ? ({ ...prev, status: actionType }) : null)
             setIsDialogOpen(false)
         } catch (error) {
             console.error("Error updating status:", error)
+            toast.error("Failed to update status")
         } finally {
             setProcessingAction(false)
         }
@@ -75,7 +89,7 @@ export default function DriverDetailPage() {
 
         const fetchRides = async () => {
             try {
-                const ridesRef = collection(db, "rides")
+                const ridesRef = collection(db, "rideRequests")
                 const q = query(
                     ridesRef,
                     where("driverId", "==", driverId),
@@ -235,8 +249,103 @@ export default function DriverDetailPage() {
                             <span className="font-bold">{driver.totalRides || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Completion Rate</span>
-                            <span className="font-bold">98%</span>
+                            <span className="text-muted-foreground">Wallet Balance</span>
+                            <span className="font-bold text-lg">₹{driver.walletBalance?.toFixed(2) || "0.00"}</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Wallet Management Card (New) */}
+                <Card className="md:col-span-3">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <CreditCard className="h-5 w-5" /> Wallet Management
+                        </CardTitle>
+                        <CardDescription>Recharge driver wallet or deduct commission dues manually.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                            <div>
+                                <div className="text-sm text-muted-foreground">Current Balance</div>
+                                <div className="text-3xl font-bold">₹{driver.walletBalance?.toFixed(2) || "0.00"}</div>
+                            </div>
+                            <div className="flex gap-4">
+                                <Button
+                                    className="bg-green-600 hover:bg-green-700"
+                                    disabled={processingAction}
+                                    onClick={async () => {
+                                        const amountStr = prompt("Enter amount to recharge (₹):")
+                                        const amount = parseFloat(amountStr || "0")
+                                        if (isNaN(amount) || amount <= 0) return
+
+                                        if (!admin) return
+                                        setProcessingAction(true)
+                                        try {
+                                            await updateWalletBalance(driver.id, amount, 'recharge')
+
+                                            // Ledger Entry
+                                            await addDoc(collection(db, "ledger_entries"), {
+                                                amount,
+                                                type: 'credit',
+                                                account: 'driver_wallet',
+                                                driverId: driver.id,
+                                                description: `Admin Recharge: ${amount}`,
+                                                timestamp: serverTimestamp(),
+                                                adminId: admin.uid
+                                            })
+
+                                            await logWalletAdjustment(admin.uid, admin.email || "", 'driver', driver.id, driver.name || "N/A", amount, 'recharge')
+
+                                            setDriver(prev => prev ? ({ ...prev, walletBalance: (prev.walletBalance || 0) + amount }) : null)
+                                            toast.success(`Recharged ₹${amount} successfully`)
+                                        } catch (e) {
+                                            toast.error("Recharge failed")
+                                        } finally {
+                                            setProcessingAction(false)
+                                        }
+                                    }}
+                                >
+                                    <Plus className="mr-2 h-4 w-4" /> Recharge Wallet
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                    disabled={processingAction}
+                                    onClick={async () => {
+                                        const amountStr = prompt("Enter amount to deduct (₹):")
+                                        const amount = parseFloat(amountStr || "0")
+                                        if (isNaN(amount) || amount <= 0) return
+
+                                        if (!admin) return
+                                        setProcessingAction(true)
+                                        try {
+                                            await updateWalletBalance(driver.id, amount, 'deduct')
+
+                                            // Ledger Entry
+                                            await addDoc(collection(db, "ledger_entries"), {
+                                                amount,
+                                                type: 'debit',
+                                                account: 'driver_wallet',
+                                                driverId: driver.id,
+                                                description: `Admin Deduction: ${amount}`,
+                                                timestamp: serverTimestamp(),
+                                                adminId: admin.uid
+                                            })
+
+                                            await logWalletAdjustment(admin.uid, admin.email || "", 'driver', driver.id, driver.name || "N/A", amount, 'deduct')
+
+                                            setDriver(prev => prev ? ({ ...prev, walletBalance: (prev.walletBalance || 0) - amount }) : null)
+                                            toast.error(`Deducted ₹${amount} successfully`)
+                                        } catch (e) {
+                                            toast.error("Deduction failed")
+                                        } finally {
+                                            setProcessingAction(false)
+                                        }
+                                    }}
+                                >
+                                    <Minus className="mr-2 h-4 w-4" /> Deduct Amount
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -301,81 +410,128 @@ export default function DriverDetailPage() {
                                         No documents uploaded yet.
                                     </div>
                                 ) : (
-                                    Object.entries(driver.documents || {}).map(([docType, docData]: [string, any]) => (
-                                        <div key={docType} className="border rounded-lg p-4 flex flex-col gap-3">
+                                    <>
+                                        {/* Profile Photo Verification (Always first) */}
+                                        <div className="border rounded-lg p-4 flex flex-col gap-3 bg-blue-50/30">
                                             <div className="flex items-center justify-between">
-                                                <div className="bg-muted p-2 rounded-full">
-                                                    <FileText className="h-5 w-5" />
+                                                <div className="bg-blue-100 p-2 rounded-full">
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage src={driver.photoURL} />
+                                                        <AvatarFallback>{driver.name?.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
                                                 </div>
-                                                <Badge variant={
-                                                    docData.status === 'approved' ? 'secondary' :
-                                                        docData.status === 'rejected' ? 'destructive' : 'outline'
-                                                } className={docData.status === 'approved' ? 'bg-green-100 text-green-800' : ''}>
-                                                    {docData.status.toUpperCase()}
-                                                </Badge>
+                                                <Badge variant="outline" className="bg-white">PROFILE PHOTO</Badge>
                                             </div>
                                             <div>
-                                                <div className="font-medium capitalize">{docType.replace(/_/g, ' ')}</div>
+                                                <div className="font-medium">Profile Picture</div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    Uploaded: {docData.updatedAt?.toDate?.()?.toLocaleDateString() || 'N/A'}
+                                                    Primary identification photo
                                                 </div>
                                             </div>
-                                            <div className="mt-auto space-y-2">
+                                            <div className="mt-auto">
                                                 <Button variant="outline" size="sm" className="w-full" asChild>
-                                                    <a href={docData.url} target="_blank" rel="noopener noreferrer">View Document</a>
+                                                    <a href={driver.photoURL} target="_blank" rel="noopener noreferrer">View Full Size</a>
                                                 </Button>
-                                                {docData.status === 'pending' && (
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <Button
-                                                            variant="default"
-                                                            size="sm"
-                                                            className="bg-green-600 hover:bg-green-700"
-                                                            disabled={processingDoc === docType}
-                                                            onClick={async () => {
-                                                                setProcessingDoc(docType);
-                                                                await updateDriverDocumentStatus(driver.id, docType, 'approved');
-                                                                // Refresh driver data locally or trigger re-fetch
-                                                                setDriver(prev => prev ? ({
-                                                                    ...prev,
-                                                                    documents: {
-                                                                        ...prev.documents,
-                                                                        [docType]: { ...prev.documents![docType], status: 'approved' }
-                                                                    }
-                                                                }) : null)
-                                                                setProcessingDoc(null);
-                                                            }}
-                                                        >
-                                                            Approve
-                                                        </Button>
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            disabled={processingDoc === docType}
-                                                            onClick={async () => {
-                                                                setProcessingDoc(docType);
-                                                                await updateDriverDocumentStatus(driver.id, docType, 'rejected');
-                                                                setDriver(prev => prev ? ({
-                                                                    ...prev,
-                                                                    documents: {
-                                                                        ...prev.documents,
-                                                                        [docType]: { ...prev.documents![docType], status: 'rejected' }
-                                                                    }
-                                                                }) : null)
-                                                                setProcessingDoc(null);
-                                                            }}
-                                                        >
-                                                            Reject
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                                {docData.status === 'rejected' && docData.rejectionReason && (
-                                                    <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
-                                                        Reason: {docData.rejectionReason}
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
-                                    ))
+
+                                        {Object.entries(driver.documents || {}).map(([docType, docData]: [string, any]) => (
+                                            <div key={docType} className="border rounded-lg p-4 flex flex-col gap-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="bg-muted p-2 rounded-full">
+                                                        <FileText className="h-5 w-5" />
+                                                    </div>
+                                                    <Badge variant={
+                                                        docData.status === 'approved' ? 'secondary' :
+                                                            docData.status === 'rejected' ? 'destructive' : 'outline'
+                                                    } className={docData.status === 'approved' ? 'bg-green-100 text-green-800' : ''}>
+                                                        {docData.status.toUpperCase()}
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium capitalize">{docType.replace(/_/g, ' ')}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Uploaded: {docData.updatedAt?.toDate?.()?.toLocaleDateString() || 'N/A'}
+                                                    </div>
+                                                </div>
+                                                <div className="mt-auto space-y-2">
+                                                    <Button variant="outline" size="sm" className="w-full" asChild>
+                                                        <a href={docData.url} target="_blank" rel="noopener noreferrer">View Document</a>
+                                                    </Button>
+                                                    {docData.status === 'pending' && (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="bg-green-600 hover:bg-green-700"
+                                                                disabled={processingDoc === docType}
+                                                                onClick={async () => {
+                                                                    if (!admin) return
+                                                                    setProcessingDoc(docType);
+                                                                    try {
+                                                                        await updateDriverDocumentStatus(driver.id, docType, 'approved');
+                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docType, 'verify')
+
+                                                                        // Refresh driver data locally
+                                                                        setDriver(prev => prev ? ({
+                                                                            ...prev,
+                                                                            documents: {
+                                                                                ...prev.documents,
+                                                                                [docType]: { ...prev.documents![docType], status: 'approved' }
+                                                                            }
+                                                                        }) : null)
+                                                                        toast.success(`${docType} approved`)
+                                                                    } catch (e) {
+                                                                        toast.error("Verification failed")
+                                                                    } finally {
+                                                                        setProcessingDoc(null);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Approve
+                                                            </Button>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                disabled={processingDoc === docType}
+                                                                onClick={async () => {
+                                                                    if (!admin) return
+                                                                    const reason = prompt("Enter rejection reason:")
+                                                                    if (reason === null) return // Canceled
+
+                                                                    setProcessingDoc(docType);
+                                                                    try {
+                                                                        await updateDriverDocumentStatus(driver.id, docType, 'rejected', reason);
+                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docType, 'reject', reason)
+
+                                                                        setDriver(prev => prev ? ({
+                                                                            ...prev,
+                                                                            documents: {
+                                                                                ...prev.documents,
+                                                                                [docType]: { ...prev.documents![docType], status: 'rejected', rejectionReason: reason }
+                                                                            }
+                                                                        }) : null)
+                                                                        toast.error(`${docType} rejected`)
+                                                                    } catch (e) {
+                                                                        toast.error("Rejection failed")
+                                                                    } finally {
+                                                                        setProcessingDoc(null);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Reject
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {docData.status === 'rejected' && docData.rejectionReason && (
+                                                        <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                                                            Reason: {docData.rejectionReason}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
                                 )}
                             </div>
                         </CardContent>
