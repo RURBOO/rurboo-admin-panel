@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "rurboo-prod"
-  }
+  },
+  "targets": {
+    "rurboo-prod": {
+      "hosting": {
+        "admin": [
+          "rurboo-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
