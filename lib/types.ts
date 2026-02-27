@@ -5,6 +5,7 @@ export interface Driver {
     name: string;
     email: string;
     phoneNumber?: string;
+    phone?: string;
     photoURL?: string;
     role?: string; // 'rider', 'admin', 'driver'
     rating?: number;

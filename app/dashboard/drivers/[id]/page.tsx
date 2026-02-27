@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Phone, Mail, Car, MapPin, Calendar, Star, ShieldCheck, FileText, Plus, Minus, CreditCard } from "lucide-react"
+import { ArrowLeft, Phone, Mail, Car, MapPin, Calendar, Star, ShieldCheck, FileText, Plus, Minus, CreditCard, XCircle } from "lucide-react"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -42,6 +42,7 @@ export default function DriverDetailPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [actionType, setActionType] = useState<'suspended' | 'verified' | 'blocked'>('suspended')
     const [processingAction, setProcessingAction] = useState(false)
+    const [viewingImage, setViewingImage] = useState<string | null>(null)
 
     const openActionDialog = (type: 'suspended' | 'verified' | 'blocked') => {
         setActionType(type)
@@ -206,6 +207,9 @@ export default function DriverDetailPage() {
                                 <Badge variant={driver.status === 'verified' ? 'default' : 'secondary'} className={driver.status === 'verified' ? 'bg-green-600' : ''}>
                                     {driver.status?.toUpperCase()}
                                 </Badge>
+                                <Badge variant="outline" className={driver.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}>
+                                    {driver.isOnline ? "Online" : "Offline"}
+                                </Badge>
                             </div>
                         </div>
                     </div>
@@ -242,7 +246,7 @@ export default function DriverDetailPage() {
                     <CardContent className="space-y-4">
                         <div className="flex items-center gap-3">
                             <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{driver.phoneNumber || "N/A"}</span>
+                            <span>{driver.phone || driver.phoneNumber || "N/A"}</span>
                         </div>
                         <div className="flex items-center gap-3">
                             <Mail className="h-4 w-4 text-muted-foreground" />
@@ -267,11 +271,11 @@ export default function DriverDetailPage() {
                     <CardContent className="space-y-4">
                         <div className="flex items-center gap-3">
                             <Car className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-semibold">{driver.vehicleType}</span>
+                            <span className="font-semibold">{driver.vehicleType || "N/A"}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                             <div className="text-muted-foreground">Number:</div>
-                            <div>{driver.vehicleNumber}</div>
+                            <div>{driver.vehicleNumber || "N/A"}</div>
                             <div className="text-muted-foreground">Model:</div>
                             <div>{driver.vehicleModel || "N/A"}</div>
                             <div className="text-muted-foreground">Color:</div>
@@ -480,8 +484,8 @@ export default function DriverDetailPage() {
                                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img src={getImageSource(docData.url)} alt={docData.label} className="object-cover w-full h-full" />
                                                     </div>
-                                                    <Button variant="outline" size="sm" className="w-full" asChild>
-                                                        <a href={getImageSource(docData.url)} target="_blank" rel="noopener noreferrer">View Full Size</a>
+                                                    <Button variant="outline" size="sm" className="w-full" onClick={() => setViewingImage(getImageSource(docData.url))}>
+                                                        View Full Size
                                                     </Button>
                                                     {docData.status === 'pending' && (
                                                         <div className="grid grid-cols-2 gap-2">
@@ -591,6 +595,29 @@ export default function DriverDetailPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Fullscreen Image Viewer Modal */}
+            {viewingImage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setViewingImage(null)}>
+                    <div className="relative max-w-4xl max-h-screen">
+                        <Button
+                            variant="secondary"
+                            size="icon"
+                            className="absolute -top-12 right-0 rounded-full"
+                            onClick={() => setViewingImage(null)}
+                        >
+                            <XCircle className="h-6 w-6" />
+                        </Button>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={viewingImage}
+                            alt="Full Size Document"
+                            className="max-w-full max-h-[90vh] object-contain rounded-md"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

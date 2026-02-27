@@ -235,18 +235,21 @@ export default function DriversPage() {
                                             </Avatar>
                                             <div>
                                                 <div className="font-medium">{driver.name || "N/A"}</div>
-                                                <div className="text-sm text-muted-foreground">
+                                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                                                     {driver.verified && (
                                                         <span className="flex items-center gap-1">
                                                             <ShieldCheck className="h-3 w-3 text-blue-600" />
                                                             Verified
                                                         </span>
                                                     )}
+                                                    <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${driver.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}`}>
+                                                        {driver.isOnline ? "Online" : "Offline"}
+                                                    </Badge>
                                                 </div>
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{driver.phoneNumber || "N/A"}</TableCell>
+                                    <TableCell>{driver.phone || driver.phoneNumber || "N/A"}</TableCell>
                                     <TableCell>
                                         <div>
                                             <div className="font-medium">{driver.vehicleType || "N/A"}</div>
