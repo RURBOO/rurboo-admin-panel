@@ -34,6 +34,12 @@ export function useLiveLocations() {
             snapshot.forEach((doc) => {
                 const data = doc.data()
                 if (data.currentLocation?.latitude && data.currentLocation?.longitude) {
+                    // Normalize vehicle type
+                    let vType = (data.vehicleType || "unknown").toLowerCase();
+                    if (vType.includes('bike')) vType = 'bike';
+                    else if (vType.includes('auto')) vType = 'auto';
+                    else if (vType.includes('car')) vType = 'car';
+
                     driverLocations.push({
                         id: doc.id,
                         name: data.name || "Driver",
@@ -41,12 +47,17 @@ export function useLiveLocations() {
                         lat: data.currentLocation.latitude,
                         lng: data.currentLocation.longitude,
                         status: data.status,
-                        vehicleType: data.vehicleType,
+                        vehicleType: vType,
                         lastUpdated: data.currentLocation.lastUpdated,
                         isOnline: data.isOnline
                     })
                 }
             })
+
+            if (driverLocations.length > 0) {
+                console.log(`📍 LiveMap: Found ${driverLocations.length} online verified drivers:`,
+                    driverLocations.map(d => `${d.name} (${d.id})`));
+            }
 
             setLocations(prev => {
                 //Replace all driver locations

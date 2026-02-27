@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { GoogleMap, LoadScript, Marker, InfoWindow } from "@react-google-maps/api"
+import Link from "next/link"
+import { db } from "@/lib/firebase"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -138,116 +140,159 @@ function LiveMapContent() {
 
             {/* Fleet Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Total Active Drivers
+                <Card className="bg-blue-50/30">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Active Drivers
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{drivers.length}</div>
+                        <div className="text-3xl font-bold">{drivers.length}</div>
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Bike className="h-4 w-4" />
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                            <Bike className="h-3 w-3" />
                             Bikes
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{vehicleStats['bike'] || 0}</div>
+                        <div className="text-3xl font-bold">{vehicleStats['bike'] || 0}</div>
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Car className="h-4 w-4" />
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                            <Car className="h-3 w-3" />
                             Autos
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{vehicleStats['auto'] || 0}</div>
+                        <div className="text-3xl font-bold">{vehicleStats['auto'] || 0}</div>
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Car className="h-4 w-4" />
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                            <Car className="h-3 w-3" />
                             Cars
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{vehicleStats['car'] || 0}</div>
+                        <div className="text-3xl font-bold">{vehicleStats['car'] || 0}</div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Map */}
-            <Card>
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-[600px]">
-                            <div className="text-center">
-                                <div className="text-lg font-medium">Loading map...</div>
-                                <div className="text-sm text-muted-foreground mt-2">Fetching live locations</div>
+            {/* Map & Sidebar */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <Card className="lg:col-span-3 overflow-hidden">
+                    <CardContent className="p-0">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-[600px] bg-muted/20">
+                                <div className="text-center">
+                                    <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
+                                    <div className="text-lg font-medium">Loading Map...</div>
+                                    <div className="text-sm text-muted-foreground mt-2">Fetching live driver data</div>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <LoadScript googleMapsApiKey={MAPS_API_KEY}>
-                            <GoogleMap
-                                mapContainerStyle={mapContainerStyle}
-                                center={selectedLocation ? {
-                                    lat: selectedLocation.lat,
-                                    lng: selectedLocation.lng
-                                } : filteredDrivers.length > 0 ? {
-                                    lat: filteredDrivers[0].lat,
-                                    lng: filteredDrivers[0].lng
-                                } : defaultCenter}
-                                zoom={13}
-                                options={mapOptions}
-                            >
-                                {filteredDrivers.map((location) => (
-                                    <Marker
-                                        key={location.id}
-                                        position={{ lat: location.lat, lng: location.lng }}
-                                        onClick={() => setSelectedLocation(location)}
-                                        icon={getMarkerIcon(location)}
-                                    />
-                                ))}
+                        ) : (
+                            <LoadScript googleMapsApiKey={MAPS_API_KEY}>
+                                <GoogleMap
+                                    mapContainerStyle={mapContainerStyle}
+                                    center={selectedLocation ? {
+                                        lat: selectedLocation.lat,
+                                        lng: selectedLocation.lng
+                                    } : filteredDrivers.length > 0 ? {
+                                        lat: filteredDrivers[0].lat,
+                                        lng: filteredDrivers[0].lng
+                                    } : defaultCenter}
+                                    zoom={selectedLocation ? 16 : 13}
+                                    options={mapOptions}
+                                >
+                                    {filteredDrivers.map((location) => (
+                                        <Marker
+                                            key={location.id}
+                                            position={{ lat: location.lat, lng: location.lng }}
+                                            onClick={() => setSelectedLocation(location)}
+                                            icon={getMarkerIcon(location)}
+                                            label={{
+                                                text: location.name?.split(' ')[0] || "Driver",
+                                                className: "bg-white/90 px-2 py-0.5 rounded border border-gray-200 text-xs font-bold text-gray-800 shadow-sm whitespace-nowrap -mt-12",
+                                                color: "#1e293b"
+                                            }}
+                                        />
+                                    ))}
 
-                                {selectedLocation && (
-                                    <InfoWindow
-                                        position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
-                                        onCloseClick={() => setSelectedLocation(null)}
-                                    >
-                                        <div className="p-2">
-                                            <div className="font-medium flex items-center gap-2 mb-1">
-                                                {selectedLocation.type === 'driver' ? (
-                                                    <Car className="h-4 w-4" />
-                                                ) : (
-                                                    <User className="h-4 w-4" />
-                                                )}
-                                                {selectedLocation.name}
-                                            </div>
-                                            {selectedLocation.vehicleType && (
-                                                <div className="text-sm text-gray-600">
-                                                    Vehicle: {selectedLocation.vehicleType}
+                                    {selectedLocation && (
+                                        <InfoWindow
+                                            position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
+                                            onCloseClick={() => setSelectedLocation(null)}
+                                        >
+                                            <div className="p-2 min-w-[200px]">
+                                                <div className="font-bold flex items-center gap-2 mb-2 border-b pb-1">
+                                                    <Badge className="bg-blue-600">{selectedLocation.vehicleType?.toUpperCase()}</Badge>
+                                                    <span className="truncate">{selectedLocation.name}</span>
                                                 </div>
-                                            )}
-                                            <div className="text-sm text-gray-600">
-                                                Status: <Badge variant="default" className="ml-1 bg-green-600">
-                                                    {selectedLocation.isOnline ? 'Online' : 'Offline'}
-                                                </Badge>
+                                                <div className="space-y-1.5 pt-1">
+                                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                                        <MapPin className="h-3 w-3" />
+                                                        Lat: {selectedLocation.lat.toFixed(4)}, Lng: {selectedLocation.lng.toFixed(4)}
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                                                        <Badge variant="outline" className={selectedLocation.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}>
+                                                            {selectedLocation.isOnline ? "Online" : "Offline"}
+                                                        </Badge>
+                                                        <Button size="xs" variant="ghost" className="h-6 text-[10px]" asChild>
+                                                            <Link href={`/dashboard/drivers/${selectedLocation.id}`}>View Profile</Link>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </InfoWindow>
+                                    )}
+                                </GoogleMap>
+                            </LoadScript>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Sidebar List */}
+                <Card className="flex flex-col h-[600px]">
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                            Active Drivers ({filteredDrivers.length})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-y-auto p-0">
+                        {filteredDrivers.length === 0 ? (
+                            <div className="p-8 text-center text-sm text-muted-foreground">
+                                No drivers online.
+                            </div>
+                        ) : (
+                            <div className="divide-y">
+                                {filteredDrivers.map(driver => (
+                                    <button
+                                        key={driver.id}
+                                        onClick={() => setSelectedLocation(driver)}
+                                        className={`w-full p-4 text-left hover:bg-muted/50 transition-colors flex items-start gap-3 ${selectedLocation?.id === driver.id ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-500/20' : ''}`}
+                                    >
+                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${driver.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-300'}`} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm truncate">{driver.name}</div>
+                                            <div className="text-[10px] text-muted-foreground capitalize flex items-center gap-1">
+                                                {driver.vehicleType === 'bike' ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                                                {driver.vehicleType || "unknown"}
                                             </div>
                                         </div>
-                                    </InfoWindow>
-                                )}
-                            </GoogleMap>
-                        </LoadScript>
-                    )}
-                </CardContent>
-            </Card>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Instructions */}
             {drivers.length === 0 && !loading && (
