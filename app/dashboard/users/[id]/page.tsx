@@ -127,6 +127,14 @@ export default function UserDetailPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button
+                        variant="outline"
+                        onClick={() => router.push(`/dashboard/map?userId=${userId}`)}
+                        className="flex items-center gap-2"
+                    >
+                        <MapPin className="h-4 w-4" />
+                        Show Live Location
+                    </Button>
+                    <Button
                         variant={user.isBlocked ? "outline" : "destructive"}
                         disabled={processing}
                         onClick={async () => {

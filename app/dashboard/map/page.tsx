@@ -47,16 +47,25 @@ function LiveMapContent() {
     // Get API key from environment
     const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
 
-    // Check for target driver from URL
+    // Check for target driver or user from URL
     useEffect(() => {
-        const targetId = searchParams.get('driverId')
-        if (targetId && !loading && drivers.length > 0) {
-            const target = drivers.find(d => d.id === targetId)
+        const driverId = searchParams.get('driverId')
+        const userId = searchParams.get('userId')
+
+        if (driverId && !loading && drivers.length > 0) {
+            const target = drivers.find(d => d.id === driverId)
             if (target) {
+                setViewMode('drivers')
+                setSelectedLocation(target)
+            }
+        } else if (userId && !loading && users.length > 0) {
+            const target = users.find(u => u.id === userId)
+            if (target) {
+                setViewMode('users')
                 setSelectedLocation(target)
             }
         }
-    }, [searchParams, drivers, loading])
+    }, [searchParams, drivers, users, loading])
 
     // Filter drivers by vehicle type
     const filteredDrivers = useMemo(() => {
