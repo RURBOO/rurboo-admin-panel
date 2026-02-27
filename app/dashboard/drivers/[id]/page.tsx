@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
 import { useAuth } from "@/features/auth/AuthContext"
@@ -39,10 +40,10 @@ export default function DriverDetailPage() {
     const [loadingRides, setLoadingRides] = useState(true)
     const [processingDoc, setProcessingDoc] = useState<string | null>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
-    const [actionType, setActionType] = useState<'suspended' | 'active' | 'blocked'>('suspended')
+    const [actionType, setActionType] = useState<'suspended' | 'verified' | 'blocked'>('suspended')
     const [processingAction, setProcessingAction] = useState(false)
 
-    const openActionDialog = (type: 'suspended' | 'active' | 'blocked') => {
+    const openActionDialog = (type: 'suspended' | 'verified' | 'blocked') => {
         setActionType(type)
         setIsDialogOpen(true)
     }
@@ -140,6 +141,48 @@ export default function DriverDetailPage() {
         )
     }
 
+    const getImageSource = (base64OrUrl?: string) => {
+        if (!base64OrUrl) return '';
+        if (base64OrUrl.startsWith('http')) return base64OrUrl;
+        if (base64OrUrl.startsWith('data:image')) return base64OrUrl;
+        return `data:image/jpeg;base64,${base64OrUrl}`;
+    };
+
+    const documentsList = [
+        {
+            type: 'profile',
+            label: 'Profile Picture',
+            url: driver.profileImage,
+            status: driver.profileStatus || 'pending',
+            reason: driver.profileRejectionReason
+        },
+        {
+            type: 'license',
+            label: 'Driving License',
+            url: driver.licenseImage,
+            status: driver.licenseStatus || 'pending',
+            reason: driver.licenseRejectionReason
+        },
+        {
+            type: 'rc',
+            label: 'Vehicle RC',
+            url: driver.rcImage,
+            status: driver.rcStatus || 'pending',
+            reason: driver.rcRejectionReason
+        }
+    ].filter(doc => doc.url);
+
+    const missingDocuments = documentsList.length < 3;
+    const canActivate = !missingDocuments && documentsList.every(d => d.status === 'approved');
+
+    const handleActivateAttempt = () => {
+        if (!canActivate) {
+            toast.error("Cannot activate driver. All documents must be uploaded and approved first.");
+            return;
+        }
+        openActionDialog('verified');
+    };
+
     return (
         <div className="p-8 space-y-8 animate-in fade-in duration-500">
             {/* Header */}
@@ -150,7 +193,7 @@ export default function DriverDetailPage() {
                     </Button>
                     <div className="flex items-center gap-4">
                         <Avatar className="h-16 w-16">
-                            <AvatarImage src={driver.photoURL} />
+                            <AvatarImage src={getImageSource(driver.profileImage || driver.photoURL)} />
                             <AvatarFallback>{driver.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -160,7 +203,7 @@ export default function DriverDetailPage() {
                             </h2>
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <span className="text-sm">Driver ID: {driver.id}</span>
-                                <Badge variant={driver.status === 'active' ? 'default' : 'secondary'} className={driver.status === 'active' ? 'bg-green-600' : ''}>
+                                <Badge variant={driver.status === 'verified' ? 'default' : 'secondary'} className={driver.status === 'verified' ? 'bg-green-600' : ''}>
                                     {driver.status?.toUpperCase()}
                                 </Badge>
                             </div>
@@ -176,11 +219,16 @@ export default function DriverDetailPage() {
                             Block Account
                         </Button>
                     )}
-                    {driver.status === 'active' ? (
+                    {driver.status === 'verified' ? (
                         <Button variant="outline" onClick={() => openActionDialog('suspended')}>Suspend Account</Button>
-                    ) : driver.status === 'suspended' || driver.status === 'blocked' ? (
-                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => openActionDialog('active')}>Activate Account</Button>
+                    ) : driver.status === 'suspended' || driver.status === 'blocked' || driver.status === 'pending' ? (
+                        <Button className="bg-green-600 hover:bg-green-700" onClick={handleActivateAttempt}>Activate Account</Button>
                     ) : null}
+                    <Button variant="secondary" asChild>
+                        <Link href={`/dashboard/map?driverId=${driver.id}`}>
+                            <MapPin className="mr-2 h-4 w-4" /> Track Location
+                        </Link>
+                    </Button>
                     <Button>Edit Profile</Button>
                 </div>
             </div>
@@ -405,38 +453,14 @@ export default function DriverDetailPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {Object.entries(driver.documents || {}).length === 0 ? (
+                                {documentsList.length === 0 ? (
                                     <div className="col-span-3 text-center py-8 text-muted-foreground">
                                         No documents uploaded yet.
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Profile Photo Verification (Always first) */}
-                                        <div className="border rounded-lg p-4 flex flex-col gap-3 bg-blue-50/30">
-                                            <div className="flex items-center justify-between">
-                                                <div className="bg-blue-100 p-2 rounded-full">
-                                                    <Avatar className="h-8 w-8">
-                                                        <AvatarImage src={driver.photoURL} />
-                                                        <AvatarFallback>{driver.name?.charAt(0)}</AvatarFallback>
-                                                    </Avatar>
-                                                </div>
-                                                <Badge variant="outline" className="bg-white">PROFILE PHOTO</Badge>
-                                            </div>
-                                            <div>
-                                                <div className="font-medium">Profile Picture</div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    Primary identification photo
-                                                </div>
-                                            </div>
-                                            <div className="mt-auto">
-                                                <Button variant="outline" size="sm" className="w-full" asChild>
-                                                    <a href={driver.photoURL} target="_blank" rel="noopener noreferrer">View Full Size</a>
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        {Object.entries(driver.documents || {}).map(([docType, docData]: [string, any]) => (
-                                            <div key={docType} className="border rounded-lg p-4 flex flex-col gap-3">
+                                        {documentsList.map((docData) => (
+                                            <div key={docData.type} className={`border rounded-lg p-4 flex flex-col gap-3 ${docData.type === 'profile' ? 'bg-blue-50/30' : ''}`}>
                                                 <div className="flex items-center justify-between">
                                                     <div className="bg-muted p-2 rounded-full">
                                                         <FileText className="h-5 w-5" />
@@ -449,14 +473,15 @@ export default function DriverDetailPage() {
                                                     </Badge>
                                                 </div>
                                                 <div>
-                                                    <div className="font-medium capitalize">{docType.replace(/_/g, ' ')}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        Uploaded: {docData.updatedAt?.toDate?.()?.toLocaleDateString() || 'N/A'}
-                                                    </div>
+                                                    <div className="font-medium capitalize">{docData.label}</div>
                                                 </div>
                                                 <div className="mt-auto space-y-2">
+                                                    <div className="h-32 w-full mb-3 rounded-md overflow-hidden bg-gray-100 border relative">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img src={getImageSource(docData.url)} alt={docData.label} className="object-cover w-full h-full" />
+                                                    </div>
                                                     <Button variant="outline" size="sm" className="w-full" asChild>
-                                                        <a href={docData.url} target="_blank" rel="noopener noreferrer">View Document</a>
+                                                        <a href={getImageSource(docData.url)} target="_blank" rel="noopener noreferrer">View Full Size</a>
                                                     </Button>
                                                     {docData.status === 'pending' && (
                                                         <div className="grid grid-cols-2 gap-2">
@@ -464,23 +489,21 @@ export default function DriverDetailPage() {
                                                                 variant="default"
                                                                 size="sm"
                                                                 className="bg-green-600 hover:bg-green-700"
-                                                                disabled={processingDoc === docType}
+                                                                disabled={processingDoc === docData.type}
                                                                 onClick={async () => {
                                                                     if (!admin) return
-                                                                    setProcessingDoc(docType);
+                                                                    setProcessingDoc(docData.type);
                                                                     try {
-                                                                        await updateDriverDocumentStatus(driver.id, docType, 'approved');
-                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docType, 'verify')
+                                                                        await updateDriverDocumentStatus(driver.id, docData.type, 'approved');
+                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docData.type, 'verify')
 
                                                                         // Refresh driver data locally
                                                                         setDriver(prev => prev ? ({
                                                                             ...prev,
-                                                                            documents: {
-                                                                                ...prev.documents,
-                                                                                [docType]: { ...prev.documents![docType], status: 'approved' }
-                                                                            }
+                                                                            [`${docData.type}Status`]: 'approved',
+                                                                            [`${docData.type}RejectionReason`]: null
                                                                         }) : null)
-                                                                        toast.success(`${docType} approved`)
+                                                                        toast.success(`${docData.label} approved`)
                                                                     } catch (e) {
                                                                         toast.error("Verification failed")
                                                                     } finally {
@@ -493,25 +516,23 @@ export default function DriverDetailPage() {
                                                             <Button
                                                                 variant="destructive"
                                                                 size="sm"
-                                                                disabled={processingDoc === docType}
+                                                                disabled={processingDoc === docData.type}
                                                                 onClick={async () => {
                                                                     if (!admin) return
                                                                     const reason = prompt("Enter rejection reason:")
                                                                     if (reason === null) return // Canceled
 
-                                                                    setProcessingDoc(docType);
+                                                                    setProcessingDoc(docData.type);
                                                                     try {
-                                                                        await updateDriverDocumentStatus(driver.id, docType, 'rejected', reason);
-                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docType, 'reject', reason)
+                                                                        await updateDriverDocumentStatus(driver.id, docData.type, 'rejected', reason);
+                                                                        await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", docData.type, 'reject', reason)
 
                                                                         setDriver(prev => prev ? ({
                                                                             ...prev,
-                                                                            documents: {
-                                                                                ...prev.documents,
-                                                                                [docType]: { ...prev.documents![docType], status: 'rejected', rejectionReason: reason }
-                                                                            }
+                                                                            [`${docData.type}Status`]: 'rejected',
+                                                                            [`${docData.type}RejectionReason`]: reason
                                                                         }) : null)
-                                                                        toast.error(`${docType} rejected`)
+                                                                        toast.error(`${docData.label} rejected`)
                                                                     } catch (e) {
                                                                         toast.error("Rejection failed")
                                                                     } finally {
@@ -523,9 +544,9 @@ export default function DriverDetailPage() {
                                                             </Button>
                                                         </div>
                                                     )}
-                                                    {docData.status === 'rejected' && docData.rejectionReason && (
+                                                    {docData.status === 'rejected' && docData.reason && (
                                                         <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
-                                                            Reason: {docData.rejectionReason}
+                                                            Reason: {docData.reason}
                                                         </div>
                                                     )}
                                                 </div>

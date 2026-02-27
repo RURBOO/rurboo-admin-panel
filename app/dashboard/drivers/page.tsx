@@ -43,6 +43,7 @@ import { exportToCSV } from "@/lib/utils/export"
 import { toast } from "sonner"
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { Driver } from "@/lib/types"
 import { useAuth } from "@/features/auth/AuthContext"
 import { logDriverSuspend, logDriverApprove } from "@/lib/adminActions"
 
@@ -82,7 +83,7 @@ export default function DriversPage() {
                     break
                 case 'approve':
                 case 'activate':
-                    newStatus = 'active'
+                    newStatus = 'verified'
                     break
             }
 
@@ -129,11 +130,11 @@ export default function DriversPage() {
 
     const getStatusBadge = (status: string, verified: boolean) => {
         switch (status) {
-            case 'active':
+            case 'verified':
                 return (
                     <Badge variant="default" className="gap-1 bg-green-600">
                         <CheckCircle className="h-3 w-3" />
-                        Active
+                        Verified
                     </Badge>
                 )
             case 'suspended':
@@ -162,6 +163,14 @@ export default function DriversPage() {
         }
     }
 
+    const canActivateDriver = (driver: Driver) => {
+        return Boolean(
+            driver.profileImage && driver.profileStatus === 'approved' &&
+            driver.licenseImage && driver.licenseStatus === 'approved' &&
+            driver.rcImage && driver.rcStatus === 'approved'
+        );
+    };
+
     return (
         <div className="p-8 space-y-8">
             <div className="flex items-center justify-between">
@@ -178,7 +187,7 @@ export default function DriversPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Drivers ({drivers.length})</SelectItem>
-                            <SelectItem value="active">Active ({drivers.filter(d => d.status === 'active').length})</SelectItem>
+                            <SelectItem value="verified">Verified ({drivers.filter(d => d.status === 'verified').length})</SelectItem>
                             <SelectItem value="suspended">Suspended ({drivers.filter(d => d.status === 'suspended').length})</SelectItem>
                             <SelectItem value="blocked">Blocked ({drivers.filter(d => d.status === 'blocked').length})</SelectItem>
                             <SelectItem value="pending">Pending ({drivers.filter(d => d.status === 'pending').length})</SelectItem>
@@ -267,7 +276,14 @@ export default function DriversPage() {
                                                 <DropdownMenuSeparator />
                                                 {driver.status === 'pending' && (
                                                     <DropdownMenuItem
-                                                        onClick={() => openActionDialog(driver, 'approve')}
+                                                        onClick={(e) => {
+                                                            if (!canActivateDriver(driver)) {
+                                                                e.preventDefault();
+                                                                toast.error("Cannot approve: All documents must be uploaded and approved first.");
+                                                                return;
+                                                            }
+                                                            openActionDialog(driver, 'approve');
+                                                        }}
                                                         className="text-green-600"
                                                     >
                                                         <CheckCircle className="mr-2 h-4 w-4" />
@@ -276,14 +292,21 @@ export default function DriversPage() {
                                                 )}
                                                 {driver.status === 'suspended' && (
                                                     <DropdownMenuItem
-                                                        onClick={() => openActionDialog(driver, 'activate')}
+                                                        onClick={(e) => {
+                                                            if (!canActivateDriver(driver)) {
+                                                                e.preventDefault();
+                                                                toast.error("Cannot activate: All documents must be uploaded and approved first.");
+                                                                return;
+                                                            }
+                                                            openActionDialog(driver, 'activate');
+                                                        }}
                                                         className="text-green-600"
                                                     >
                                                         <CheckCircle className="mr-2 h-4 w-4" />
                                                         Activate Driver
                                                     </DropdownMenuItem>
                                                 )}
-                                                {driver.status === 'active' && (
+                                                {driver.status === 'verified' && (
                                                     <DropdownMenuItem
                                                         onClick={() => openActionDialog(driver, 'suspend')}
                                                         className="text-destructive"

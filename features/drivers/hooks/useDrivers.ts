@@ -52,13 +52,21 @@ export function useDrivers() {
     ) => {
         try {
             const driverRef = doc(db, "drivers", driverId);
-            const key = `documents.${docType}`;
+            const statusKey = `${docType}Status`;
+            const reasonKey = `${docType}RejectionReason`;
 
-            await updateDoc(driverRef, {
-                [`${key}.status`]: status,
-                [`${key}.updatedAt`]: new Date(),
-                ...(reason ? { [`${key}.rejectionReason`]: reason } : {})
-            });
+            const updateData: any = {
+                [statusKey]: status,
+                updatedAt: new Date()
+            };
+
+            if (status === 'rejected' && reason) {
+                updateData[reasonKey] = reason;
+            } else if (status === 'approved') {
+                updateData[reasonKey] = null;
+            }
+
+            await updateDoc(driverRef, updateData);
         } catch (error) {
             console.error("Error updating document status:", error);
             throw error;

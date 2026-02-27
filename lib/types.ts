@@ -9,7 +9,7 @@ export interface Driver {
     role?: string; // 'rider', 'admin', 'driver'
     rating?: number;
     totalRides?: number;
-    status: 'active' | 'pending' | 'suspended' | 'blocked';
+    status: 'verified' | 'pending' | 'suspended' | 'blocked';
     verificationStatus?: 'approved' | 'pending' | 'rejected';
     verified?: boolean;
     vehicleDetails?: {
@@ -34,14 +34,17 @@ export interface Driver {
     };
     updatedAt?: Timestamp;
     updatedBy?: string;
-    documents?: {
-        [key: string]: {
-            url: string;
-            status: 'pending' | 'approved' | 'rejected';
-            updatedAt?: Timestamp;
-            rejectionReason?: string;
-        }
-    };
+    licenseImage?: string;
+    licenseStatus?: 'pending' | 'approved' | 'rejected';
+    licenseRejectionReason?: string;
+
+    rcImage?: string;
+    rcStatus?: 'pending' | 'approved' | 'rejected';
+    rcRejectionReason?: string;
+
+    profileImage?: string;
+    profileStatus?: 'pending' | 'approved' | 'rejected';
+    profileRejectionReason?: string;
 }
 
 export interface User {

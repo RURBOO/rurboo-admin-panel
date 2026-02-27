@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { GoogleMap, LoadScript, Marker, InfoWindow } from "@react-google-maps/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select"
 import { useLiveLocations } from "@/features/map/hooks/useLiveLocations"
 import { MapPin, Bike, Car, User } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 
 // Default center (you can update this to your preferred location)
 const defaultCenter = {
@@ -33,13 +35,25 @@ const mapOptions = {
     fullscreenControl: true,
 }
 
-export default function LiveMapPage() {
+function LiveMapContent() {
     const { locations, drivers, loading } = useLiveLocations()
+    const searchParams = useSearchParams()
     const [selectedLocation, setSelectedLocation] = useState<any>(null)
     const [vehicleFilter, setVehicleFilter] = useState<string>("all")
 
     // Get API key from environment
     const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
+
+    // Check for target driver from URL
+    useEffect(() => {
+        const targetId = searchParams.get('driverId')
+        if (targetId && !loading && drivers.length > 0) {
+            const target = drivers.find(d => d.id === targetId)
+            if (target) {
+                setSelectedLocation(target)
+            }
+        }
+    }, [searchParams, drivers, loading])
 
     // Filter drivers by vehicle type
     const filteredDrivers = useMemo(() => {
@@ -183,7 +197,10 @@ export default function LiveMapPage() {
                         <LoadScript googleMapsApiKey={MAPS_API_KEY}>
                             <GoogleMap
                                 mapContainerStyle={mapContainerStyle}
-                                center={filteredDrivers.length > 0 ? {
+                                center={selectedLocation ? {
+                                    lat: selectedLocation.lat,
+                                    lng: selectedLocation.lng
+                                } : filteredDrivers.length > 0 ? {
                                     lat: filteredDrivers[0].lat,
                                     lng: filteredDrivers[0].lng
                                 } : defaultCenter}
@@ -252,5 +269,17 @@ export default function LiveMapPage() {
                 </Card>
             )}
         </div>
+    )
+}
+
+export default function LiveMapPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center p-8 h-screen">
+                <div className="text-muted-foreground animate-pulse">Loading Map...</div>
+            </div>
+        }>
+            <LiveMapContent />
+        </Suspense>
     )
 }

@@ -36,7 +36,7 @@ export function useDashboardStats() {
                 // Get Active Drivers Count
                 const driversQuery = query(
                     collection(db, "drivers"),
-                    where("status", "==", "active")
+                    where("status", "==", "verified")
                 )
                 const driversSnapshot = await getCountFromServer(driversQuery)
                 const activeDriversCount = driversSnapshot.data().count

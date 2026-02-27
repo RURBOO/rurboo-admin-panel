@@ -72,7 +72,7 @@ export function useRisk() {
                     id: driverId,
                     name: 'Driver',
                     email: '',
-                    status: 'active',
+                    status: 'verified',
                     rating: 4.8 // Default, could be lower if we fetched real driver
                 }
 

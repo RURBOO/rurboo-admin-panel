@@ -24,7 +24,7 @@ export function useLiveLocations() {
         // Subscribe to active drivers' locations
         const driversQuery = query(
             collection(db, "drivers"),
-            where("status", "==", "active"),
+            where("status", "==", "verified"),
             where("isOnline", "==", true)
         )
 
