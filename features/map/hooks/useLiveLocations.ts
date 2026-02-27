@@ -54,24 +54,58 @@ export function useLiveLocations() {
                 }
             })
 
-            if (driverLocations.length > 0) {
-                console.log(`📍 LiveMap: Found ${driverLocations.length} online verified drivers:`,
-                    driverLocations.map(d => `${d.name} (${d.id})`));
-            }
-
             setLocations(prev => {
-                //Replace all driver locations
-                const users = prev.filter(loc => loc.type === 'user')
-                return [...users, ...driverLocations]
+                const others = prev.filter(loc => loc.type !== 'driver')
+                return [...others, ...driverLocations]
             })
 
             setLoading(false)
         }, (error) => {
-            console.error("Error fetching live locations:", error)
-            setLoading(false)
+            console.error("Error fetching driver locations:", error)
         })
 
-        return () => unsubscribeDrivers()
+        // Subscribe to users with recent location updates
+        const usersQuery = query(
+            collection(db, "users"),
+            where("currentLocation", "!=", null)
+        )
+
+        const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+            const userLocations: LiveLocation[] = []
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+
+            snapshot.forEach((doc) => {
+                const data = doc.data()
+                const lastUpdated = data.lastLocationUpdate?.toDate() || data.currentLocation?.lastUpdated?.toDate()
+
+                // Only show users active in last 5 mins
+                if (data.currentLocation?.latitude && data.currentLocation?.longitude &&
+                    (!lastUpdated || lastUpdated > fiveMinutesAgo)) {
+                    userLocations.push({
+                        id: doc.id,
+                        name: data.name || "User",
+                        type: 'user',
+                        lat: data.currentLocation.latitude,
+                        lng: data.currentLocation.longitude,
+                        status: 'active',
+                        lastUpdated: data.lastLocationUpdate || data.currentLocation.lastUpdated,
+                        isOnline: true
+                    })
+                }
+            })
+
+            setLocations(prev => {
+                const others = prev.filter(loc => loc.type !== 'user')
+                return [...others, ...userLocations]
+            })
+        }, (error) => {
+            console.error("Error fetching user locations:", error)
+        })
+
+        return () => {
+            unsubscribeDrivers()
+            unsubscribeUsers()
+        }
     }, [])
 
     return {

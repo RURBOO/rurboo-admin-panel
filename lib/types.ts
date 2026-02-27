@@ -67,6 +67,11 @@ export interface User {
     blockedReason?: string | null;
     walletBalance?: number; // Added walletBalance
     createdAt?: Timestamp;
+    currentLocation?: {
+        latitude: number;
+        longitude: number;
+        lastUpdated?: Timestamp;
+    };
 }
 
 export interface Ride {

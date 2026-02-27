@@ -38,10 +38,11 @@ const mapOptions = {
 }
 
 function LiveMapContent() {
-    const { locations, drivers, loading } = useLiveLocations()
+    const { locations, drivers, users, loading } = useLiveLocations()
     const searchParams = useSearchParams()
     const [selectedLocation, setSelectedLocation] = useState<any>(null)
     const [vehicleFilter, setVehicleFilter] = useState<string>("all")
+    const [viewMode, setViewMode] = useState<'drivers' | 'users'>('drivers')
 
     // Get API key from environment
     const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
@@ -120,34 +121,65 @@ function LiveMapContent() {
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Live Map</h2>
                     <p className="text-muted-foreground">
-                        Real-time tracking of drivers and active rides
+                        Real-time tracking of drivers and active users
                     </p>
                 </div>
                 <div className="flex gap-2 items-center">
-                    <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filter by vehicle" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Vehicles ({drivers.length})</SelectItem>
-                            <SelectItem value="bike">Bikes ({vehicleStats['bike'] || 0})</SelectItem>
-                            <SelectItem value="auto">Autos ({vehicleStats['auto'] || 0})</SelectItem>
-                            <SelectItem value="car">Cars ({vehicleStats['car'] || 0})</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex bg-muted p-1 rounded-lg mr-2">
+                        <Button
+                            variant={viewMode === 'drivers' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('drivers')}
+                            className="h-8 text-xs px-3"
+                        >
+                            Drivers
+                        </Button>
+                        <Button
+                            variant={viewMode === 'users' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('users')}
+                            className="h-8 text-xs px-3"
+                        >
+                            Users
+                        </Button>
+                    </div>
+                    {viewMode === 'drivers' && (
+                        <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Filter by vehicle" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Vehicles ({drivers.length})</SelectItem>
+                                <SelectItem value="bike">Bikes ({vehicleStats['bike'] || 0})</SelectItem>
+                                <SelectItem value="auto">Autos ({vehicleStats['auto'] || 0})</SelectItem>
+                                <SelectItem value="car">Cars ({vehicleStats['car'] || 0})</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
             </div>
 
-            {/* Fleet Statistics */}
+            {/* Fleet Statistics / User Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="bg-blue-50/30">
+                <Card className={viewMode === 'drivers' ? "bg-blue-50/30" : ""}>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                        <CardTitle className="text-xs font-semibold uppercase tracking-wider">
                             Active Drivers
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-3xl font-bold">{drivers.length}</div>
+                    </CardContent>
+                </Card>
+                <Card className={viewMode === 'users' ? "bg-green-50/30 font-semibold text-green-600" : ""}>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
+                            <User className="h-3 w-3" />
+                            Active Users
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-foreground">{users.length}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -165,22 +197,11 @@ function LiveMapContent() {
                     <CardHeader className="pb-2">
                         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                             <Car className="h-3 w-3" />
-                            Autos
+                            Cars/Autos
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{vehicleStats['auto'] || 0}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                            <Car className="h-3 w-3" />
-                            Cars
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{vehicleStats['car'] || 0}</div>
+                        <div className="text-3xl font-bold">{(vehicleStats['auto'] || 0) + (vehicleStats['car'] || 0)}</div>
                     </CardContent>
                 </Card>
             </div>
@@ -204,23 +225,25 @@ function LiveMapContent() {
                                     center={selectedLocation ? {
                                         lat: selectedLocation.lat,
                                         lng: selectedLocation.lng
-                                    } : filteredDrivers.length > 0 ? {
+                                    } : viewMode === 'drivers' && filteredDrivers.length > 0 ? {
                                         lat: filteredDrivers[0].lat,
                                         lng: filteredDrivers[0].lng
+                                    } : viewMode === 'users' && users.length > 0 ? {
+                                        lat: users[0].lat,
+                                        lng: users[0].lng
                                     } : defaultCenter}
                                     zoom={selectedLocation ? 16 : 13}
                                     options={mapOptions}
                                 >
-                                    {filteredDrivers.map((location) => (
+                                    {(viewMode === 'drivers' ? filteredDrivers : users).map((location) => (
                                         <Marker
                                             key={location.id}
                                             position={{ lat: location.lat, lng: location.lng }}
                                             onClick={() => setSelectedLocation(location)}
-                                            icon={getMarkerIcon(location)}
+                                            icon={location.type === 'user' ? "https://maps.google.com/mapfiles/ms/icons/green-dot.png" : undefined}
                                             label={{
-                                                text: location.name?.split(' ')[0] || "Driver",
-                                                className: "bg-white/90 px-2 py-0.5 rounded border border-gray-200 text-xs font-bold text-gray-800 shadow-sm whitespace-nowrap -mt-12",
-                                                color: "#1e293b"
+                                                text: location.name?.split(' ')[0] || (location.type === 'driver' ? "Driver" : "User"),
+                                                className: `bg-white/90 px-2 py-0.5 rounded border border-gray-200 text-xs font-bold shadow-sm whitespace-nowrap -mt-12 ${location.type === 'user' ? 'text-green-700' : 'text-blue-700'}`,
                                             }}
                                         />
                                     ))}
@@ -232,7 +255,9 @@ function LiveMapContent() {
                                         >
                                             <div className="p-2 min-w-[200px]">
                                                 <div className="font-bold flex items-center gap-2 mb-2 border-b pb-1">
-                                                    <Badge className="bg-blue-600">{selectedLocation.vehicleType?.toUpperCase()}</Badge>
+                                                    <Badge className={selectedLocation.type === 'user' ? "bg-green-600" : "bg-blue-600"}>
+                                                        {selectedLocation.type === 'user' ? "USER" : selectedLocation.vehicleType?.toUpperCase()}
+                                                    </Badge>
                                                     <span className="truncate">{selectedLocation.name}</span>
                                                 </div>
                                                 <div className="space-y-1.5 pt-1">
@@ -242,10 +267,12 @@ function LiveMapContent() {
                                                     </div>
                                                     <div className="flex items-center justify-between mt-2 pt-2 border-t">
                                                         <Badge variant="outline" className={selectedLocation.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}>
-                                                            {selectedLocation.isOnline ? "Online" : "Offline"}
+                                                            {selectedLocation.isOnline ? "Active" : "Offline"}
                                                         </Badge>
                                                         <Button size="xs" variant="ghost" className="h-6 text-[10px]" asChild>
-                                                            <Link href={`/dashboard/drivers/${selectedLocation.id}`}>View Profile</Link>
+                                                            <Link href={`/dashboard/${selectedLocation.type === 'driver' ? 'drivers' : 'users'}/${selectedLocation.id}`}>
+                                                                View {selectedLocation.type === 'driver' ? 'Profile' : 'Details'}
+                                                            </Link>
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -262,28 +289,37 @@ function LiveMapContent() {
                 <Card className="flex flex-col h-[600px]">
                     <CardHeader className="pb-3 border-b">
                         <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                            Active Drivers ({filteredDrivers.length})
+                            {viewMode === 'drivers' ? `Online Drivers (${filteredDrivers.length})` : `Active Users (${users.length})`}
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1 overflow-y-auto p-0">
-                        {filteredDrivers.length === 0 ? (
+                        {(viewMode === 'drivers' ? filteredDrivers : users).length === 0 ? (
                             <div className="p-8 text-center text-sm text-muted-foreground">
-                                No drivers online.
+                                No {viewMode} online.
                             </div>
                         ) : (
                             <div className="divide-y">
-                                {filteredDrivers.map(driver => (
+                                {(viewMode === 'drivers' ? filteredDrivers : users).map(item => (
                                     <button
-                                        key={driver.id}
-                                        onClick={() => setSelectedLocation(driver)}
-                                        className={`w-full p-4 text-left hover:bg-muted/50 transition-colors flex items-start gap-3 ${selectedLocation?.id === driver.id ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-500/20' : ''}`}
+                                        key={item.id}
+                                        onClick={() => setSelectedLocation(item)}
+                                        className={`w-full p-4 text-left hover:bg-muted/50 transition-colors flex items-start gap-3 ${selectedLocation?.id === item.id ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-500/20' : ''}`}
                                     >
-                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${driver.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-300'}`} />
+                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${item.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-300'}`} />
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-sm truncate">{driver.name}</div>
+                                            <div className="font-medium text-sm truncate">{item.name}</div>
                                             <div className="text-[10px] text-muted-foreground capitalize flex items-center gap-1">
-                                                {driver.vehicleType === 'bike' ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
-                                                {driver.vehicleType || "unknown"}
+                                                {item.type === 'driver' ? (
+                                                    <>
+                                                        {item.vehicleType === 'bike' ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                                                        {item.vehicleType || "unknown"}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <User className="h-3 w-3" />
+                                                        Regular User
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </button>
