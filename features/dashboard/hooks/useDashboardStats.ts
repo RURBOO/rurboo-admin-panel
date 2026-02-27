@@ -45,26 +45,21 @@ export function useDashboardStats() {
                 const usersSnapshot = await getCountFromServer(collection(db, "users"))
                 const totalUsersCount = usersSnapshot.data().count
 
-                // Get Active Rides Count (status = 'started' or 'accepted')
+                // Get Active Rides Count (status = 'pending', 'accepted', 'in_progress', 'arrived')
                 const activeRidesQuery = query(
-                    collection(db, "rides"),
-                    where("status", "in", ["started", "accepted"])
+                    collection(db, "rideRequests"),
+                    where("status", "in", ["pending", "accepted", "in_progress", "arrived"])
                 )
                 const activeRidesSnapshot = await getCountFromServer(activeRidesQuery)
                 const activeRidesCount = activeRidesSnapshot.data().count
-
-                // Calculate Total Revenue (all time) & 7-Day History
-                // Note: For production with thousands of rides, this aggregation should move to a Cloud Function.
-                // For now, client-side aggregation is acceptable for the admin panel.
 
                 const now = new Date()
                 const sevenDaysAgo = new Date()
                 sevenDaysAgo.setDate(now.getDate() - 7)
 
                 // Fetch all completed rides for total revenue
-                // Optimally we should keep a running total in a metadata document, but for now:
                 const completedRidesQuery = query(
-                    collection(db, "rides"),
+                    collection(db, "rideRequests"),
                     where("status", "==", "completed")
                 )
                 const completedRidesSnapshot = await getDocs(completedRidesQuery)
@@ -82,10 +77,11 @@ export function useDashboardStats() {
 
                 completedRidesSnapshot.docs.forEach((doc) => {
                     const data = doc.data()
-                    const fare = data.fare || 0
+                    // Driver app sets 'finalFare', User app sets 'fare' initially.
+                    const fare = data.finalFare || data.fare || 0
                     totalRevenue += fare
 
-                    // Check if ride is within last 7 days for chart
+                    // Check if ride is within last 7 days for chart using 'createdAt'
                     if (data.createdAt) {
                         const rideDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
                         if (rideDate >= sevenDaysAgo) {

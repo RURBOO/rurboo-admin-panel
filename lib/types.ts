@@ -46,6 +46,10 @@ export interface Driver {
     profileImage?: string;
     profileStatus?: 'pending' | 'approved' | 'rejected';
     profileRejectionReason?: string;
+
+    vehicleImage?: string;
+    vehicleStatus?: 'pending' | 'approved' | 'rejected';
+    vehicleRejectionReason?: string;
 }
 
 export interface User {

@@ -170,10 +170,17 @@ export default function DriverDetailPage() {
             url: driver.rcImage,
             status: driver.rcStatus || 'pending',
             reason: driver.rcRejectionReason
+        },
+        {
+            type: 'vehicle',
+            label: 'Vehicle Photo',
+            url: driver.vehicleImage,
+            status: driver.vehicleStatus || 'pending',
+            reason: driver.vehicleRejectionReason
         }
     ].filter(doc => doc.url);
 
-    const missingDocuments = documentsList.length < 3;
+    const missingDocuments = documentsList.length < 4;
     const canActivate = !missingDocuments && documentsList.every(d => d.status === 'approved');
 
     const handleActivateAttempt = () => {
@@ -404,10 +411,15 @@ export default function DriverDetailPage() {
             </div>
 
             {/* Tabs for History & Docs */}
-            <Tabs defaultValue="rides" className="w-full">
+            <Tabs defaultValue={driver.status === 'verified' ? "rides" : "documents"} className="w-full">
                 <TabsList>
                     <TabsTrigger value="rides">Ride History</TabsTrigger>
-                    <TabsTrigger value="documents">Documents</TabsTrigger>
+                    <TabsTrigger value="documents" className={driver.status !== 'verified' ? "bg-amber-50" : ""}>
+                        Documents
+                        {documentsList.some(d => d.status === 'pending') && (
+                            <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        )}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="rides" className="mt-4">
