@@ -13,8 +13,7 @@ export function useRides() {
         // Listen to 'rideRequests' collection, ordered by createdAt desc
         const q = query(
             collection(db, "rideRequests"),
-            orderBy("createdAt", "desc"),
-            limit(50)
+            limit(100)
         )
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -28,6 +27,14 @@ export function useRides() {
                     timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : 'Now'
                 } as Ride)
             })
+
+            // Sort client-side to avoid Firestore composite index requirements
+            ridesData.sort((a, b) => {
+                const timeA = a.createdAt?.toMillis?.() || 0;
+                const timeB = b.createdAt?.toMillis?.() || 0;
+                return timeB - timeA;
+            });
+
             setRides(ridesData)
             setLoading(false)
         }, (error) => {

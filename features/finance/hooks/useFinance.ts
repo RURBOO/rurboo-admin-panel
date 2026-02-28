@@ -20,8 +20,7 @@ export function useFinance() {
         // In a real production app, you'd query a dedicated 'transactions' collection
         const q = query(
             collection(db, "rideRequests"),
-            where("status", "in", ["completed", "closed"]),
-            orderBy("createdAt", "desc")
+            where("status", "in", ["completed", "closed"])
         )
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -49,6 +48,13 @@ export function useFinance() {
                 })
             })
 
+            // Sort transactions client-side
+            transactions.sort((a, b) => {
+                const timeA = new Date(a.date).getTime() || 0;
+                const timeB = new Date(b.date).getTime() || 0;
+                return timeB - timeA;
+            });
+
             setStats(prev => ({
                 ...prev,
                 totalRevenue: totalRev,
@@ -56,7 +62,7 @@ export function useFinance() {
                 pendingSettlements: 0,
                 recentTransactions: transactions.slice(0, 50)
             }))
-            // Loading state handled after both listeners return (simplified here)
+            setLoading(false)
         }, (error) => {
             console.error("Error fetching finance data:", error)
             setLoading(false)

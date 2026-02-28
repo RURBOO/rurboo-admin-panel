@@ -218,16 +218,16 @@ export default function UsersPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/users/${userData.id}`)}>
+                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/users/${userData.id}`); }}>
                                                         View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/rides?userId=${userData.id}`)}>
+                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rides?userId=${userData.id}`); }}>
                                                         View Ride History
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     {userData.isBlocked ? (
                                                         <DropdownMenuItem
-                                                            onClick={() => openBlockDialog(userData, 'unblock')}
+                                                            onClick={(e) => { e.stopPropagation(); openBlockDialog(userData, 'unblock'); }}
                                                             className="text-green-600"
                                                         >
                                                             <CheckCircle className="mr-2 h-4 w-4" />
@@ -235,7 +235,7 @@ export default function UsersPage() {
                                                         </DropdownMenuItem>
                                                     ) : (
                                                         <DropdownMenuItem
-                                                            onClick={() => openBlockDialog(userData, 'block')}
+                                                            onClick={(e) => { e.stopPropagation(); openBlockDialog(userData, 'block'); }}
                                                             className="text-destructive"
                                                         >
                                                             <Ban className="mr-2 h-4 w-4" />

@@ -280,19 +280,20 @@ export default function DriversPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}>
+                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}`); }}>
                                                         View Profile
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/drivers/${driver.id}?tab=documents`)}>
+                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}?tab=documents`); }}>
                                                         View Documents
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/rides?driverId=${driver.id}`)}>
+                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rides?driverId=${driver.id}`); }}>
                                                         View Ride History
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     {driver.status === 'pending' && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 if (!canActivateDriver(driver)) {
                                                                     e.preventDefault();
                                                                     toast.error("Cannot approve: All documents must be uploaded and approved first.");
@@ -309,6 +310,7 @@ export default function DriversPage() {
                                                     {driver.status === 'suspended' && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 if (!canActivateDriver(driver)) {
                                                                     e.preventDefault();
                                                                     toast.error("Cannot activate: All documents must be uploaded and approved first.");
@@ -324,7 +326,7 @@ export default function DriversPage() {
                                                     )}
                                                     {driver.status === 'verified' && (
                                                         <DropdownMenuItem
-                                                            onClick={() => openActionDialog(driver, 'suspend')}
+                                                            onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'suspend'); }}
                                                             className="text-destructive"
                                                         >
                                                             <ShieldAlert className="mr-2 h-4 w-4" />

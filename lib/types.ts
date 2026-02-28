@@ -93,7 +93,8 @@ export interface Ride {
     distance?: string;
     duration?: string;
     otp?: string;
-    timestamp: Timestamp;
+    timestamp: Timestamp | string; // Adjusting timestamp as it can be assigned a string in useRides.ts
+    createdAt?: Timestamp;
 }
 
 export interface AdminUser {

@@ -291,9 +291,9 @@ export default function DashboardPage() {
                             <TabsContent value="vehicles">
                                 <div className="grid gap-4 md:grid-cols-3">
                                     {ridesLoading ? (
-                                        Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
+                                        Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
                                     ) : (
-                                        vehicleStats.slice(0, 6).map((vehicle) => (
+                                        vehicleStats.map((vehicle) => (
                                             <div key={vehicle.vehicleType} className="bg-secondary/50 p-3 rounded-lg border">
                                                 <div className="text-xs font-medium text-muted-foreground mb-1 truncate" title={formatVehicleType(vehicle.vehicleType)}>
                                                     {formatVehicleType(vehicle.vehicleType)}
