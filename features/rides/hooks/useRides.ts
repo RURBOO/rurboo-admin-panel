@@ -10,10 +10,10 @@ export function useRides() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Listen to 'rideRequests' collection, ordered by timestamp desc
+        // Listen to 'rideRequests' collection, ordered by createdAt desc
         const q = query(
             collection(db, "rideRequests"),
-            orderBy("timestamp", "desc"),
+            orderBy("createdAt", "desc"),
             limit(50)
         )
 
@@ -24,8 +24,8 @@ export function useRides() {
                 ridesData.push({
                     id: doc.id,
                     ...data,
-                    // Handle potential timestamp format issues
-                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate().toLocaleString() : 'Now'
+                    // Parse createdAt depending on what format exists, fallback to now
+                    timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : 'Now'
                 } as Ride)
             })
             setRides(ridesData)

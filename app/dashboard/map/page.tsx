@@ -70,14 +70,20 @@ function LiveMapContent() {
     // Filter drivers by vehicle type
     const filteredDrivers = useMemo(() => {
         if (vehicleFilter === "all") return drivers
-        return drivers.filter(d => d.vehicleType === vehicleFilter)
+        return drivers.filter(d => {
+            let type = d.vehicleType || "Unknown";
+            type = type.charAt(0).toUpperCase() + type.slice(1);
+            return type === vehicleFilter;
+        })
     }, [drivers, vehicleFilter])
 
     // Get vehicle statistics
     const vehicleStats = useMemo(() => {
         const stats: Record<string, number> = {}
         drivers.forEach(driver => {
-            const type = driver.vehicleType || "unknown"
+            let type = driver.vehicleType || "Unknown";
+            // Capitalize first letter if it's not
+            type = type.charAt(0).toUpperCase() + type.slice(1);
             stats[type] = (stats[type] || 0) + 1
         })
         return stats
@@ -159,9 +165,11 @@ function LiveMapContent() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Vehicles ({drivers.length})</SelectItem>
-                                <SelectItem value="bike">Bikes ({vehicleStats['bike'] || 0})</SelectItem>
-                                <SelectItem value="auto">Autos ({vehicleStats['auto'] || 0})</SelectItem>
-                                <SelectItem value="car">Cars ({vehicleStats['car'] || 0})</SelectItem>
+                                {Object.entries(vehicleStats).map(([type, count]) => (
+                                    <SelectItem key={type} value={type}>
+                                        {type} ({count})
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     )}
@@ -183,7 +191,7 @@ function LiveMapContent() {
                 <Card className={viewMode === 'users' ? "bg-green-50/30 font-semibold text-green-600" : ""}>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
-                            <User className="h-3 w-3" />
+                            <User className="h-4 w-4" />
                             Active Users
                         </CardTitle>
                     </CardHeader>
@@ -191,28 +199,51 @@ function LiveMapContent() {
                         <div className="text-3xl font-bold text-foreground">{users.length}</div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                            <Bike className="h-3 w-3" />
-                            Bikes
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{vehicleStats['bike'] || 0}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                            <Car className="h-3 w-3" />
-                            Cars/Autos
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{(vehicleStats['auto'] || 0) + (vehicleStats['car'] || 0)}</div>
-                    </CardContent>
-                </Card>
+
+                {/* Dynamically render top 2 vehicle types if available, otherwise fallback */}
+                {Object.entries(vehicleStats)
+                    .sort((a, b) => b[1] - a[1]) // Sort by highest count
+                    .slice(0, 2)
+                    .map(([type, count]) => (
+                        <Card key={type}>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                    {type.toLowerCase().includes('bike') ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}
+                                    {type}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-3xl font-bold">{count}</div>
+                            </CardContent>
+                        </Card>
+                    ))}
+
+                {Object.keys(vehicleStats).length < 1 && (
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                <Bike className="h-4 w-4" />
+                                Top Vehicles
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold">0</div>
+                        </CardContent>
+                    </Card>
+                )}
+                {Object.keys(vehicleStats).length < 2 && (
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                <Car className="h-4 w-4" />
+                                Other Vehicles
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold">0</div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* Map & Sidebar */}
@@ -320,8 +351,8 @@ function LiveMapContent() {
                                             <div className="text-[10px] text-muted-foreground capitalize flex items-center gap-1">
                                                 {item.type === 'driver' ? (
                                                     <>
-                                                        {item.vehicleType === 'bike' ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
-                                                        {item.vehicleType || "unknown"}
+                                                        {(item.vehicleType?.toLowerCase().includes('bike')) ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                                                        {item.vehicleType || "Unknown"}
                                                     </>
                                                 ) : (
                                                     <>

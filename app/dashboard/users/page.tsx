@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
     Table,
     TableBody,
@@ -54,6 +55,7 @@ export default function UsersPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [actionType, setActionType] = useState<'block' | 'unblock'>('block')
     const [processing, setProcessing] = useState(false)
+    const router = useRouter()
 
     const handleExport = () => {
         const dataToExport = statusFilter === "all"
@@ -171,7 +173,11 @@ export default function UsersPage() {
                             </TableRow>
                         ) : (
                             filteredUsers.map((userData) => (
-                                <TableRow key={userData.id}>
+                                <TableRow
+                                    key={userData.id}
+                                    className="cursor-pointer hover:bg-muted/50"
+                                    onClick={() => router.push(`/dashboard/users/${userData.id}`)}
+                                >
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <Avatar>
@@ -202,37 +208,43 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell>{userData.totalRides || 0}</TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => window.location.href = `/dashboard/users/${userData.id}`}>View Details</DropdownMenuItem>
-                                                <DropdownMenuItem>View Ride History</DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                {userData.isBlocked ? (
-                                                    <DropdownMenuItem
-                                                        onClick={() => openBlockDialog(userData, 'unblock')}
-                                                        className="text-green-600"
-                                                    >
-                                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                                        Unblock User
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/users/${userData.id}`)}>
+                                                        View Details
                                                     </DropdownMenuItem>
-                                                ) : (
-                                                    <DropdownMenuItem
-                                                        onClick={() => openBlockDialog(userData, 'block')}
-                                                        className="text-destructive"
-                                                    >
-                                                        <Ban className="mr-2 h-4 w-4" />
-                                                        Block User
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/rides?userId=${userData.id}`)}>
+                                                        View Ride History
                                                     </DropdownMenuItem>
-                                                )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                                    <DropdownMenuSeparator />
+                                                    {userData.isBlocked ? (
+                                                        <DropdownMenuItem
+                                                            onClick={() => openBlockDialog(userData, 'unblock')}
+                                                            className="text-green-600"
+                                                        >
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Unblock User
+                                                        </DropdownMenuItem>
+                                                    ) : (
+                                                        <DropdownMenuItem
+                                                            onClick={() => openBlockDialog(userData, 'block')}
+                                                            className="text-destructive"
+                                                        >
+                                                            <Ban className="mr-2 h-4 w-4" />
+                                                            Block User
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

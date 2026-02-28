@@ -34,11 +34,11 @@ export function useLiveLocations() {
             snapshot.forEach((doc) => {
                 const data = doc.data()
                 if (data.currentLocation?.latitude && data.currentLocation?.longitude) {
-                    // Normalize vehicle type
-                    let vType = (data.vehicleType || "unknown").toLowerCase();
-                    if (vType.includes('bike')) vType = 'bike';
-                    else if (vType.includes('auto')) vType = 'auto';
-                    else if (vType.includes('car')) vType = 'car';
+                    // Clean vehicle type for consistent grouping later
+                    let vType = (data.vehicleType || "unknown");
+                    // Assuming the data comes as "Bike taxi", "E-Rikshaw", etc.
+                    // We'll keep it as is, but lowercase it for internal consistency if needed
+                    // Actually, keeping the exact casing from DB is safer for direct mapping
 
                     driverLocations.push({
                         id: doc.id,
@@ -64,35 +64,36 @@ export function useLiveLocations() {
             console.error("Error fetching driver locations:", error)
         })
 
-        // Subscribe to users with recent location updates
-        const usersQuery = query(
-            collection(db, "users"),
-            where("currentLocation", "!=", null)
-        )
+        // Subscribe to all users to find those with locations
+        const usersQuery = query(collection(db, "users"))
 
         const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
             const userLocations: LiveLocation[] = []
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
 
             snapshot.forEach((doc) => {
                 const data = doc.data()
-                const lastUpdated = data.lastLocationUpdate?.toDate() || data.currentLocation?.lastUpdated?.toDate()
 
-                // Only show users active in last 5 mins
-                if (data.currentLocation?.latitude && data.currentLocation?.longitude &&
-                    (!lastUpdated || lastUpdated > fiveMinutesAgo)) {
-                    userLocations.push({
-                        id: doc.id,
-                        name: data.name || "User",
-                        type: 'user',
-                        lat: data.currentLocation.latitude,
-                        lng: data.currentLocation.longitude,
-                        status: 'active',
-                        lastUpdated: data.lastLocationUpdate || data.currentLocation.lastUpdated,
-                        isOnline: true
-                    })
+                if (data.currentLocation) {
+                    // Try to get lat/lng from various potential structures
+                    const lat = data.currentLocation.latitude ?? data.currentLocation._lat;
+                    const lng = data.currentLocation.longitude ?? data.currentLocation._long;
+
+                    if (typeof lat === 'number' && typeof lng === 'number') {
+                        userLocations.push({
+                            id: doc.id,
+                            name: data.name || data.phoneNumber || "User",
+                            type: 'user',
+                            lat: lat,
+                            lng: lng,
+                            status: 'active',
+                            lastUpdated: data.lastLocationUpdate || data.currentLocation.lastUpdated || null,
+                            isOnline: true
+                        })
+                    }
                 }
             })
+
+            console.log(`Updated user locations: ${userLocations.length} active users found.`);
 
             setLocations(prev => {
                 const others = prev.filter(loc => loc.type !== 'user')

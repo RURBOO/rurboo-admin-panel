@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
     Table,
     TableBody,
@@ -55,6 +56,7 @@ export default function DriversPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate'>('suspend')
     const [processing, setProcessing] = useState(false)
+    const router = useRouter()
 
     const handleExport = () => {
         const dataToExport = statusFilter === "all"
@@ -226,7 +228,11 @@ export default function DriversPage() {
                             </TableRow>
                         ) : (
                             filteredDrivers.map((driver) => (
-                                <TableRow key={driver.id}>
+                                <TableRow
+                                    key={driver.id}
+                                    className="cursor-pointer hover:bg-muted/50"
+                                    onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}
+                                >
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <Avatar>
@@ -264,62 +270,70 @@ export default function DriversPage() {
                                     </TableCell>
                                     <TableCell>{driver.totalRides || 0}</TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => window.location.href = `/dashboard/drivers/${driver.id}`}>View Profile</DropdownMenuItem>
-                                                <DropdownMenuItem>View Documents</DropdownMenuItem>
-                                                <DropdownMenuItem>View Ride History</DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                {driver.status === 'pending' && (
-                                                    <DropdownMenuItem
-                                                        onClick={(e) => {
-                                                            if (!canActivateDriver(driver)) {
-                                                                e.preventDefault();
-                                                                toast.error("Cannot approve: All documents must be uploaded and approved first.");
-                                                                return;
-                                                            }
-                                                            openActionDialog(driver, 'approve');
-                                                        }}
-                                                        className="text-green-600"
-                                                    >
-                                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                                        Approve Driver
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}>
+                                                        View Profile
                                                     </DropdownMenuItem>
-                                                )}
-                                                {driver.status === 'suspended' && (
-                                                    <DropdownMenuItem
-                                                        onClick={(e) => {
-                                                            if (!canActivateDriver(driver)) {
-                                                                e.preventDefault();
-                                                                toast.error("Cannot activate: All documents must be uploaded and approved first.");
-                                                                return;
-                                                            }
-                                                            openActionDialog(driver, 'activate');
-                                                        }}
-                                                        className="text-green-600"
-                                                    >
-                                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                                        Activate Driver
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/drivers/${driver.id}?tab=documents`)}>
+                                                        View Documents
                                                     </DropdownMenuItem>
-                                                )}
-                                                {driver.status === 'verified' && (
-                                                    <DropdownMenuItem
-                                                        onClick={() => openActionDialog(driver, 'suspend')}
-                                                        className="text-destructive"
-                                                    >
-                                                        <ShieldAlert className="mr-2 h-4 w-4" />
-                                                        Suspend Driver
+                                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/rides?driverId=${driver.id}`)}>
+                                                        View Ride History
                                                     </DropdownMenuItem>
-                                                )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                                    <DropdownMenuSeparator />
+                                                    {driver.status === 'pending' && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                if (!canActivateDriver(driver)) {
+                                                                    e.preventDefault();
+                                                                    toast.error("Cannot approve: All documents must be uploaded and approved first.");
+                                                                    return;
+                                                                }
+                                                                openActionDialog(driver, 'approve');
+                                                            }}
+                                                            className="text-green-600"
+                                                        >
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Approve Driver
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {driver.status === 'suspended' && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                if (!canActivateDriver(driver)) {
+                                                                    e.preventDefault();
+                                                                    toast.error("Cannot activate: All documents must be uploaded and approved first.");
+                                                                    return;
+                                                                }
+                                                                openActionDialog(driver, 'activate');
+                                                            }}
+                                                            className="text-green-600"
+                                                        >
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Activate Driver
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {driver.status === 'verified' && (
+                                                        <DropdownMenuItem
+                                                            onClick={() => openActionDialog(driver, 'suspend')}
+                                                            className="text-destructive"
+                                                        >
+                                                            <ShieldAlert className="mr-2 h-4 w-4" />
+                                                            Suspend Driver
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

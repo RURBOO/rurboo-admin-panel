@@ -73,7 +73,7 @@ export default function RidesPage() {
                                     </TableCell>
                                     <TableCell className="text-right">{ride.fare ? `₹ ${ride.fare}` : '-'}</TableCell>
                                     <TableCell className="text-right text-muted-foreground text-xs">
-                                        {ride.timestamp && ride.timestamp.toDate ? ride.timestamp.toDate().toLocaleString() : 'N/A'}
+                                        {(ride.timestamp as unknown as string) || 'N/A'}
                                     </TableCell>
                                 </TableRow>
                             )))}

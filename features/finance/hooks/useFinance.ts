@@ -20,8 +20,8 @@ export function useFinance() {
         // In a real production app, you'd query a dedicated 'transactions' collection
         const q = query(
             collection(db, "rideRequests"),
-            where("status", "==", "completed"),
-            orderBy("timestamp", "desc")
+            where("status", "in", ["completed", "closed"]),
+            orderBy("createdAt", "desc")
         )
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -45,7 +45,7 @@ export function useFinance() {
                     amount: `₹ ${fare.toFixed(2)}`,
                     platformFee: `₹ ${commission.toFixed(2)}`,
                     status: 'settled', // Assuming completed rides are settled for this view
-                    date: data.timestamp?.toDate ? data.timestamp.toDate().toLocaleDateString() : 'N/A'
+                    date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() : 'N/A'
                 })
             })
 
