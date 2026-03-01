@@ -6,12 +6,14 @@ import { db } from "@/lib/firebase"
 
 export interface SupportTicket {
     id: string;
-    userId: string; // Can be DriverID or UserID
+    userId?: string;
+    driverId?: string;
     userType: 'driver' | 'user';
     subject: string;
     message: string;
-    status: 'Open' | 'In Progress' | 'Closed' | 'open' | 'pending' | 'resolved';
+    status: string;
     createdAt: any;
+    imageUrl?: string;
 }
 
 export function useSupport() {
@@ -31,12 +33,14 @@ export function useSupport() {
                 const data = doc.data()
                 ticketsData.push({
                     id: doc.id,
-                    userId: data.userId || 'Anonymous',
-                    userType: 'user', // Default to user for now as this collection is primarily User App
-                    subject: data.subject || data.category || 'Support Request',
+                    userId: data.userId,
+                    driverId: data.driverId,
+                    userType: data.userType || 'user',
+                    subject: data.reason || data.subject || data.category || 'Support Request',
                     message: data.description || data.message || '',
                     status: data.status || 'open',
-                    createdAt: data.createdAt
+                    createdAt: data.createdAt,
+                    imageUrl: data.imageUrl
                 } as SupportTicket)
             })
             setTickets(ticketsData)

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { useDashboardStats } from "@/features/dashboard/hooks/useDashboardStats"
 import { useVehicleRideStats } from "@/features/dashboard/hooks/useVehicleRideStats"
 import { useUserOnboarding, TimePeriod } from "@/features/dashboard/hooks/useUserOnboarding"
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts'
+
 import {
     Select,
     SelectContent,
@@ -19,7 +20,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function DashboardPage() {
-    const { totalRevenue, activeDrivers, totalUsers, activeRides, revenueData, loading } = useDashboardStats()
+    const { totalRevenue, platformRevenue, activeDrivers, totalUsers, activeRides, revenueData, vehicleRevenueData, loading } = useDashboardStats()
+
     const { totalRides, todayRides, vehicleStats, loading: ridesLoading } = useVehicleRideStats()
     const [onboardingPeriod, setOnboardingPeriod] = useState<TimePeriod>('daily')
     const { data: onboardingData, totalInPeriod, loading: onboardingLoading } = useUserOnboarding(onboardingPeriod)
@@ -54,8 +56,15 @@ export default function DashboardPage() {
             icon: CreditCard,
         },
         {
+            title: "Platform Revenue",
+            value: formatCurrency(platformRevenue),
+            change: "Total commission earned",
+            icon: TrendingUp,
+        },
+        {
             title: "Active Drivers",
             value: activeDrivers.toString(),
+
             change: "Verified & online",
             icon: Car,
         },
@@ -87,7 +96,8 @@ export default function DashboardPage() {
             </div>
 
             {/* Main Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+
                 {stats.map((stat) => (
                     <Card key={stat.title}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -192,6 +202,77 @@ export default function DashboardPage() {
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium">Total Registered Users</span>
                                 {loading ? <Skeleton className="h-6 w-12" /> : <span className="text-2xl font-bold text-purple-600">{totalUsers}</span>}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                <Card className="col-span-3">
+                    <CardHeader>
+                        <CardTitle>Revenue by Vehicle</CardTitle>
+                        <CardDescription>
+                            Revenue distribution across vehicle types.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? (
+                            <Skeleton className="h-[300px] w-full" />
+                        ) : (
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={vehicleRevenueData} layout="vertical">
+                                        <XAxis type="number" hide />
+                                        <YAxis
+                                            dataKey="type"
+                                            type="category"
+                                            tickFormatter={formatVehicleType}
+                                            width={100}
+                                            fontSize={12}
+                                            axisLine={false}
+                                            tickLine={false}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: 'transparent' }}
+                                            formatter={(value) => [formatCurrency(value as number), 'Revenue']}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }}
+                                        />
+                                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                            {vehicleRevenueData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#6366f1'][index % 6]} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+                <Card className="col-span-4">
+                    <CardHeader>
+                        <CardTitle>Platform Earnings</CardTitle>
+                        <CardDescription>
+                            Comparison of Net Revenue vs Platform Commission.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[300px] flex items-center justify-center">
+                            <div className="text-center space-y-4">
+                                <TrendingUp className="h-12 w-12 text-primary mx-auto opacity-20" />
+                                <div>
+                                    <div className="text-4xl font-bold">{formatCurrency(platformRevenue)}</div>
+                                    <div className="text-sm text-muted-foreground mt-1">Platform has retained {((platformRevenue / (totalRevenue || 1)) * 100).toFixed(1)}% of total volume</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-8 pt-4">
+                                    <div className="text-left">
+                                        <div className="text-sm font-medium text-muted-foreground">Driver Payouts</div>
+                                        <div className="text-xl font-bold">{formatCurrency(totalRevenue - platformRevenue)}</div>
+                                    </div>
+                                    <div className="text-left border-l pl-8">
+                                        <div className="text-sm font-medium text-muted-foreground">Platform Fee</div>
+                                        <div className="text-xl font-bold text-green-600">{formatCurrency(platformRevenue)}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </CardContent>

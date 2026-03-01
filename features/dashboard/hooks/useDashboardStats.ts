@@ -9,22 +9,32 @@ export interface RevenuePoint {
     value: number
 }
 
+export interface VehicleRevenue {
+    type: string
+    value: number
+}
+
 export interface DashboardStats {
     totalRevenue: number
+    platformRevenue: number
     activeDrivers: number
     totalUsers: number
     activeRides: number
     revenueData: RevenuePoint[]
+    vehicleRevenueData: VehicleRevenue[]
     loading: boolean
 }
+
 
 export function useDashboardStats() {
     const [stats, setStats] = useState<DashboardStats>({
         totalRevenue: 0,
+        platformRevenue: 0,
         activeDrivers: 0,
         totalUsers: 0,
         activeRides: 0,
         revenueData: [],
+        vehicleRevenueData: [],
         loading: true
     })
 
@@ -65,7 +75,9 @@ export function useDashboardStats() {
                 const completedRidesSnapshot = await getDocs(completedRidesQuery)
 
                 let totalRevenue = 0
+                let platformRevenue = 0
                 const dailyRevenueMap = new Map<string, number>()
+                const vehicleRevenueMap = new Map<string, number>()
 
                 // Initialize last 7 days with 0
                 for (let i = 6; i >= 0; i--) {
@@ -79,7 +91,14 @@ export function useDashboardStats() {
                     const data = doc.data()
                     // Driver app sets 'finalFare', User app sets 'fare' initially.
                     const fare = data.finalFare || data.fare || 0
+                    const commission = data.commission || 0
+
                     totalRevenue += fare
+                    platformRevenue += commission
+
+                    // Vehicle breakdown
+                    const vType = data.vehicleType || 'UNKNOWN'
+                    vehicleRevenueMap.set(vType, (vehicleRevenueMap.get(vType) || 0) + fare)
 
                     // Check if ride is within last 7 days for chart using 'createdAt'
                     if (data.createdAt) {
@@ -98,16 +117,24 @@ export function useDashboardStats() {
                     value
                 }))
 
+                const vehicleRevenueData = Array.from(vehicleRevenueMap.entries()).map(([type, value]) => ({
+                    type,
+                    value
+                })).sort((a, b) => b.value - a.value)
+
                 if (isMounted) {
                     setStats({
                         totalRevenue,
+                        platformRevenue,
                         activeDrivers: activeDriversCount,
                         totalUsers: totalUsersCount,
                         activeRides: activeRidesCount,
                         revenueData,
+                        vehicleRevenueData,
                         loading: false
                     })
                 }
+
             } catch (error) {
                 console.error("Error fetching dashboard stats:", error)
                 if (isMounted) {
