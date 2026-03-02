@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
 
@@ -82,10 +82,24 @@ export function useDrivers() {
             const currentBalance = driverSnap.data().walletBalance || 0
             const newBalance = type === 'recharge' ? currentBalance + amount : currentBalance - amount
 
-            await updateDoc(driverRef, {
+
+            const batch = writeBatch(db);
+
+            batch.update(driverRef, {
                 walletBalance: newBalance,
                 updatedAt: serverTimestamp()
-            })
+            });
+
+            const historyRef = doc(collection(driverRef, 'walletHistory'));
+            batch.set(historyRef, {
+                amount: amount,
+                type: type === 'recharge' ? 'credit' : 'debit',
+                description: type === 'recharge' ? 'Admin Top-Up' : 'Admin Deduction',
+                createdAt: serverTimestamp(),
+            });
+
+            await batch.commit();
+
         } catch (error) {
             console.error("Error updating driver wallet:", error)
             throw error
