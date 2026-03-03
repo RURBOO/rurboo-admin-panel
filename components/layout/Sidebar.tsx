@@ -98,7 +98,7 @@ const routes = [
 
 export function AppSidebar() {
     const pathname = usePathname()
-    const { role } = useAuth()
+    const { role, permissions } = useAuth()
     const [isMobileOpen, setIsMobileOpen] = useState(false)
 
     return (
@@ -136,7 +136,7 @@ export function AppSidebar() {
                             {routes.map((route) => {
                                 // RBAC Check
                                 // We construct the full path to check permissions
-                                if (!canAccessRoute(role || undefined, route.href)) return null;
+                                if (!canAccessRoute(role || undefined, route.href, permissions || undefined)) return null;
 
                                 return (
                                     <Link

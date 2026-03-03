@@ -16,16 +16,22 @@ export function useAppConfig() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(doc(db, "config", "general"), (doc) => {
-            if (doc.exists()) {
-                setConfig(doc.data() as AppConfig)
+        // Define docRef OUTSIDE the snapshot callback to get the correct DocumentReference type
+        const docRef = doc(db, "config", "general")
+
+        const unsubscribe = onSnapshot(docRef, (snapshot) => {
+            if (snapshot.exists()) {
+                setConfig(snapshot.data() as AppConfig)
             } else {
-                // Create default if not exists
-                setDoc(doc.ref, {
+                // Create default config if not exists
+                setDoc(docRef, {
                     maintenanceMode: false,
                     platformVersion: "1.0.0"
-                })
+                }).catch(console.error)
             }
+            setLoading(false)
+        }, (error) => {
+            console.error("Error fetching app config:", error)
             setLoading(false)
         })
 

@@ -7,7 +7,7 @@ import { canAccessRoute } from "@/lib/rbac"
 import { RefreshCw } from "lucide-react"
 
 export default function RoleGuard({ children }: { children: React.ReactNode }) {
-    const { user, role, loading } = useAuth()
+    const { user, role, permissions, loading } = useAuth()
     const router = useRouter()
     const pathname = usePathname()
 
@@ -15,15 +15,15 @@ export default function RoleGuard({ children }: { children: React.ReactNode }) {
         if (!loading) {
             if (!user) {
                 router.push("/") // Redirect to Login if not auth
-            } else if (!canAccessRoute(role || undefined, pathname)) {
+            } else if (!canAccessRoute(role || undefined, pathname, permissions || undefined)) {
                 // Determine redirect based on role
                 if (role === 'finance') router.push("/dashboard/finance")
                 else if (role === 'support') router.push("/dashboard/support")
                 else if (role === 'risk_analyst') router.push("/dashboard/risk")
-                else router.push("/dashboard") // Fallback
+                else router.push("/dashboard") // Fallback (operators should always be allowed here now)
             }
         }
-    }, [user, role, loading, pathname, router])
+    }, [user, role, permissions, loading, pathname, router])
 
     if (loading) {
         return (
@@ -34,9 +34,7 @@ export default function RoleGuard({ children }: { children: React.ReactNode }) {
     }
 
     // Allow render if user is auth and has permission
-    // Or if checking logic is still in effect (useEffect handles redirect).
-    // To prevent flash, strictly we should return null if invalid.
-    if (!user || !canAccessRoute(role || undefined, pathname)) {
+    if (!user || !canAccessRoute(role || undefined, pathname, permissions || undefined)) {
         return null
     }
 
