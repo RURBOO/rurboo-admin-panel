@@ -40,11 +40,11 @@ export default function DriverDetailPage() {
     const [loadingRides, setLoadingRides] = useState(true)
     const [processingDoc, setProcessingDoc] = useState<string | null>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
-    const [actionType, setActionType] = useState<'suspended' | 'verified' | 'blocked'>('suspended')
+    const [actionType, setActionType] = useState<'suspended' | 'verified' | 'blocked' | 'verify_vehicle'>('suspended')
     const [processingAction, setProcessingAction] = useState(false)
     const [viewingImage, setViewingImage] = useState<string | null>(null)
 
-    const openActionDialog = (type: 'suspended' | 'verified' | 'blocked') => {
+    const openActionDialog = (type: 'suspended' | 'verified' | 'blocked' | 'verify_vehicle') => {
         setActionType(type)
         setIsDialogOpen(true)
     }
@@ -53,17 +53,34 @@ export default function DriverDetailPage() {
         if (!driver || !admin) return
         setProcessingAction(true)
         try {
-            await updateDriverStatus(driver.id, actionType)
+            if (actionType === 'verify_vehicle') {
+                await updateDriverDocumentStatus(driver.id, 'rc', 'approved');
+                await updateDriverDocumentStatus(driver.id, 'vehicle', 'approved');
+                await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", 'rc', 'verify');
+                await logDocumentVerification(admin.uid, admin.email || "", driver.id, driver.name || "N/A", 'vehicle', 'verify');
 
-            if (actionType === 'suspended' || actionType === 'blocked') {
-                await logDriverSuspend(admin.uid, admin.email || "", driver.id, driver.name || "N/A", "Admin Action")
-                toast.warning(`Driver ${actionType} successfully`)
+                // Refresh driver data locally
+                setDriver(prev => prev ? ({
+                    ...prev,
+                    rcStatus: 'approved',
+                    rcRejectionReason: undefined,
+                    vehicleStatus: 'approved',
+                    vehicleRejectionReason: undefined
+                }) : null)
+                toast.success(`Vehicle verified successfully`)
             } else {
-                await logDriverApprove(admin.uid, admin.email || "", driver.id, driver.name || "N/A")
-                toast.success("Driver activated successfully")
-            }
+                await updateDriverStatus(driver.id, actionType)
 
-            setDriver(prev => prev ? ({ ...prev, status: actionType }) : null)
+                if (actionType === 'suspended' || actionType === 'blocked') {
+                    await logDriverSuspend(admin.uid, admin.email || "", driver.id, driver.name || "N/A", "Admin Action")
+                    toast.warning(`Driver ${actionType} successfully`)
+                } else {
+                    await logDriverApprove(admin.uid, admin.email || "", driver.id, driver.name || "N/A")
+                    toast.success("Driver activated successfully")
+                }
+
+                setDriver(prev => prev ? ({ ...prev, status: actionType }) : null)
+            }
             setIsDialogOpen(false)
         } catch (error) {
             console.error("Error updating status:", error)
@@ -228,6 +245,14 @@ export default function DriverDetailPage() {
                             onClick={() => openActionDialog('blocked')}
                         >
                             Block Account
+                        </Button>
+                    )}
+                    {(driver.rcStatus !== 'approved' || driver.vehicleStatus !== 'approved') && (
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={() => openActionDialog('verify_vehicle')}
+                        >
+                            Verify Vehicle
                         </Button>
                     )}
                     {driver.status === 'verified' ? (
@@ -581,14 +606,17 @@ export default function DriverDetailPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {actionType === 'suspended' ? 'Suspend Driver Account' :
-                                actionType === 'blocked' ? 'Block Driver Account' : 'Activate Driver Account'}
+                                actionType === 'blocked' ? 'Block Driver Account' :
+                                    actionType === 'verify_vehicle' ? 'Verify Vehicle' : 'Activate Driver Account'}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {actionType === 'suspended' ?
                                 "Are you sure you want to suspend this driver? They will not be able to accept new rides." :
                                 actionType === 'blocked' ?
                                     "Are you sure you want to BLOCK this driver? This is a severe action for policy violations." :
-                                    "Are you sure you want to activate this driver? They will be able to accept rides immediately."}
+                                    actionType === 'verify_vehicle' ?
+                                        "Are you sure you want to verify the vehicle for this driver? This will automatically mark their Registration (RC) and Vehicle Photo as Approved." :
+                                        "Are you sure you want to activate this driver? They will be able to accept rides immediately."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -599,7 +627,9 @@ export default function DriverDetailPage() {
                             className={
                                 actionType === 'suspended' || actionType === 'blocked'
                                     ? 'bg-destructive hover:bg-destructive/90'
-                                    : 'bg-green-600 hover:bg-green-700'
+                                    : actionType === 'verify_vehicle'
+                                        ? 'bg-blue-600 hover:bg-blue-700'
+                                        : 'bg-green-600 hover:bg-green-700'
                             }
                         >
                             {processingAction ? 'Processing...' : 'Confirm'}
