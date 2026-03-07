@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, updateDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface SupportTicket {
@@ -14,6 +14,7 @@ export interface SupportTicket {
     status: string;
     createdAt: any;
     imageUrl?: string;
+    name?: string;
 }
 
 export function useSupport() {
@@ -27,12 +28,31 @@ export function useSupport() {
             orderBy("createdAt", "desc")
         )
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const ticketsData: SupportTicket[] = []
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            const rawDocs: any[] = []
             snapshot.forEach((doc) => {
-                const data = doc.data()
-                ticketsData.push({
-                    id: doc.id,
+                rawDocs.push({ id: doc.id, ...doc.data() })
+            })
+
+            const ticketsData: SupportTicket[] = await Promise.all(rawDocs.map(async (data) => {
+                let name = data.name;
+
+                if (!name) {
+                    try {
+                        if (data.userType === 'driver' && data.driverId) {
+                            const driverDoc = await getDoc(doc(db, "drivers", data.driverId));
+                            if (driverDoc.exists()) name = driverDoc.data().name;
+                        } else if (data.userId) {
+                            const userDoc = await getDoc(doc(db, "users", data.userId));
+                            if (userDoc.exists()) name = userDoc.data().name;
+                        }
+                    } catch (e) {
+                        console.error("Error fetching name for support ticket:", e);
+                    }
+                }
+
+                return {
+                    id: data.id,
                     userId: data.userId,
                     driverId: data.driverId,
                     userType: data.userType || 'user',
@@ -40,9 +60,11 @@ export function useSupport() {
                     message: data.description || data.message || '',
                     status: data.status || 'open',
                     createdAt: data.createdAt,
-                    imageUrl: data.imageUrl
-                } as SupportTicket)
-            })
+                    imageUrl: data.imageUrl,
+                    name: name || (data.userType === 'driver' ? "Unknown Driver" : "Unknown User")
+                } as SupportTicket;
+            }))
+
             setTickets(ticketsData)
             setLoading(false)
         }, (error) => {

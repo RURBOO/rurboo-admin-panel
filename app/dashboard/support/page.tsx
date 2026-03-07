@@ -1,5 +1,7 @@
 "use client"
 
+import { useState } from "react"
+
 import {
     Table,
     TableBody,
@@ -11,10 +13,31 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare, CheckCircle, ExternalLink } from "lucide-react"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { useSupport } from "@/features/support/hooks/useSupport"
 
 export default function SupportPage() {
     const { tickets, loading, updateTicketStatus } = useSupport()
+    const [typeFilter, setTypeFilter] = useState<string>("all")
+    const [statusFilter, setStatusFilter] = useState<string>("all")
+
+    const filteredTickets = tickets.filter(t => {
+        if (typeFilter !== 'all' && t.userType !== typeFilter) return false;
+        if (statusFilter !== 'all') {
+            const normalizedStatus = t.status.toLowerCase();
+            const normalizedFilter = statusFilter.toLowerCase();
+            if (normalizedFilter === 'open' && (normalizedStatus !== 'open' && normalizedStatus !== 'pending')) return false;
+            if (normalizedFilter === 'progress' && normalizedStatus !== 'in progress') return false;
+            if (normalizedFilter === 'closed' && (normalizedStatus !== 'closed' && normalizedStatus !== 'resolved')) return false;
+        }
+        return true;
+    });
 
     return (
         <div className="p-8 space-y-8">
@@ -25,7 +48,30 @@ export default function SupportPage() {
                         Resolve user inquiries and view feedback.
                     </p>
                 </div>
-                <Button>Create Ticket</Button>
+                <div className="flex gap-2 items-center">
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="All Roles" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Roles</SelectItem>
+                            <SelectItem value="user">Users</SelectItem>
+                            <SelectItem value="driver">Drivers</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="open">Open/Pending</SelectItem>
+                            <SelectItem value="progress">In Progress</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button>Create Ticket</Button>
+                </div>
             </div>
 
             <div className="rounded-md border">
@@ -33,7 +79,8 @@ export default function SupportPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-[100px]">Ticket ID</TableHead>
-                            <TableHead>User Type</TableHead>
+                            <TableHead>Author</TableHead>
+                            <TableHead>Type</TableHead>
                             <TableHead>Subject</TableHead>
                             <TableHead>Message</TableHead>
                             <TableHead>Status</TableHead>
@@ -49,16 +96,17 @@ export default function SupportPage() {
                                     Loading tickets...
                                 </TableCell>
                             </TableRow>
-                        ) : tickets.length === 0 ? (
+                        ) : filteredTickets.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center h-24">
+                                <TableCell colSpan={9} className="text-center h-24">
                                     No tickets found.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            tickets.map((ticket) => (
+                            filteredTickets.map((ticket) => (
                                 <TableRow key={ticket.id}>
                                     <TableCell className="font-medium text-xs">{ticket.id.substring(0, 8)}</TableCell>
+                                    <TableCell className="font-medium whitespace-nowrap">{ticket.name || 'Unknown'}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{ticket.userType.toUpperCase()}</Badge>
                                     </TableCell>

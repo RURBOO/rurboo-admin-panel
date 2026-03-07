@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch, getCountFromServer, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { User } from "@/lib/types"
 
@@ -15,14 +15,28 @@ export function useUsers() {
         // For Admin MVP, we limit to recent 50 or similar, but let's fetch all for now.
         const q = query(collection(db, "users"))
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const usersData: User[] = []
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            const rawDocs: any[] = []
             snapshot.forEach((doc) => {
-                usersData.push({
-                    id: doc.id,
-                    ...doc.data(),
-                } as User)
+                rawDocs.push({ id: doc.id, ...doc.data() })
             })
+
+            const usersData: User[] = await Promise.all(rawDocs.map(async (data) => {
+                let actualTotalRides = data.totalRides || 0;
+                try {
+                    const ridesQuery = query(collection(db, "rides"), where("userId", "==", data.id));
+                    const ridesCountSnap = await getCountFromServer(ridesQuery);
+                    actualTotalRides = ridesCountSnap.data().count;
+                } catch (e) {
+                    console.error("Error fetching rides count for user", e);
+                }
+
+                return {
+                    ...data,
+                    totalRides: actualTotalRides
+                } as User;
+            }));
+
             setUsers(usersData)
             setLoading(false)
         }, (error) => {

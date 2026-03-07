@@ -8,7 +8,7 @@ import { Driver } from "@/lib/types"
 import { useAuth } from "@/features/auth/AuthContext"
 import { logDriverSuspend, logDriverApprove, logWalletAdjustment, logDocumentVerification } from "@/lib/adminActions"
 import { toast } from "sonner"
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -43,6 +43,31 @@ export default function DriverDetailPage() {
     const [actionType, setActionType] = useState<'suspended' | 'verified' | 'blocked' | 'verify_vehicle'>('suspended')
     const [processingAction, setProcessingAction] = useState(false)
     const [viewingImage, setViewingImage] = useState<string | null>(null)
+    const [extraVehicles, setExtraVehicles] = useState<any[]>([])
+    const [loadingVehicles, setLoadingVehicles] = useState(true)
+    const [verifyingVehicleId, setVerifyingVehicleId] = useState<string | null>(null)
+
+    const verifyExtraVehicle = async (vehicleId: string) => {
+        if (!admin || !driver) return;
+        setVerifyingVehicleId(vehicleId);
+        try {
+            const vehicleRef = doc(db, "drivers", driver.id, "vehicles", vehicleId);
+            await updateDoc(vehicleRef, {
+                isVerified: true
+            });
+            toast.success("Vehicle verified successfully");
+
+            // Update local state
+            setExtraVehicles(prev => prev.map(v =>
+                v.id === vehicleId ? { ...v, isVerified: true } : v
+            ));
+        } catch (error) {
+            console.error("Error verifying vehicle:", error);
+            toast.error("Failed to verify vehicle");
+        } finally {
+            setVerifyingVehicleId(null);
+        }
+    };
 
     const openActionDialog = (type: 'suspended' | 'verified' | 'blocked' | 'verify_vehicle') => {
         setActionType(type)
@@ -129,9 +154,27 @@ export default function DriverDetailPage() {
             }
         }
 
+        const fetchVehicles = async () => {
+            try {
+                const vehiclesRef = collection(db, "drivers", driverId, "vehicles")
+                const q = query(vehiclesRef, orderBy("createdAt", "desc"))
+                const querySnapshot = await getDocs(q)
+                const vData = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }))
+                setExtraVehicles(vData)
+            } catch (error) {
+                console.error("Error fetching vehicles:", error)
+            } finally {
+                setLoadingVehicles(false)
+            }
+        }
+
         if (driverId) {
             fetchDriver()
             fetchRides()
+            fetchVehicles()
         }
     }, [driverId])
 
@@ -445,6 +488,12 @@ export default function DriverDetailPage() {
                             <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
                         )}
                     </TabsTrigger>
+                    <TabsTrigger value="vehicles">
+                        Extra Vehicles
+                        {extraVehicles.some(v => !v.isVerified) && (
+                            <span className="ml-2 h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                        )}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="rides" className="mt-4">
@@ -589,6 +638,85 @@ export default function DriverDetailPage() {
                                                         <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
                                                             Reason: {docData.reason}
                                                         </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="vehicles" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Additional Vehicles</CardTitle>
+                            <CardDescription>Extra vehicles added by the driver.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {loadingVehicles ? (
+                                    <div className="col-span-3 text-center py-8 text-muted-foreground">
+                                        Loading vehicles...
+                                    </div>
+                                ) : extraVehicles.length === 0 ? (
+                                    <div className="col-span-3 text-center py-8 text-muted-foreground">
+                                        No additional vehicles found.
+                                    </div>
+                                ) : (
+                                    <>
+                                        {extraVehicles.map((vehicle) => (
+                                            <div key={vehicle.id} className={`border rounded-lg p-4 flex flex-col gap-3 ${vehicle.isActive ? 'bg-blue-50/30 border-blue-200' : ''}`}>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="bg-muted p-2 rounded-full">
+                                                        <Car className="h-5 w-5" />
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        {vehicle.isActive && (
+                                                            <Badge variant="default" className="bg-blue-600">
+                                                                ACTIVE
+                                                            </Badge>
+                                                        )}
+                                                        <Badge variant={
+                                                            vehicle.isVerified ? 'secondary' : 'outline'
+                                                        } className={vehicle.isVerified ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+                                                            {vehicle.isVerified ? 'VERIFIED' : 'PENDING'}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-lg">{vehicle.vehicleModel}</div>
+                                                    <div className="text-muted-foreground">{vehicle.vehicleType} • {vehicle.vehicleNumber}</div>
+                                                </div>
+                                                <div className="mt-auto space-y-3">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="space-y-1">
+                                                            <div className="text-xs font-medium text-center">RC</div>
+                                                            <div className="h-24 rounded-md overflow-hidden bg-gray-100 border relative">
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img src={getImageSource(vehicle.rcImage)} alt="RC" className="object-cover w-full h-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setViewingImage(getImageSource(vehicle.rcImage))} />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="text-xs font-medium text-center">Vehicle</div>
+                                                            <div className="h-24 rounded-md overflow-hidden bg-gray-100 border relative">
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img src={getImageSource(vehicle.vehicleImage)} alt="Vehicle" className="object-cover w-full h-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setViewingImage(getImageSource(vehicle.vehicleImage))} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {!vehicle.isVerified && (
+                                                        <Button
+                                                            variant="default"
+                                                            size="sm"
+                                                            className="w-full bg-green-600 hover:bg-green-700"
+                                                            disabled={verifyingVehicleId === vehicle.id}
+                                                            onClick={() => verifyExtraVehicle(vehicle.id)}
+                                                        >
+                                                            {verifyingVehicleId === vehicle.id ? 'Verifying...' : 'Approve Vehicle'}
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>

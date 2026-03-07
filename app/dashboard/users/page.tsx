@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, Ban, CheckCircle, Shield } from "lucide-react"
+import { MoreHorizontal, Ban, CheckCircle, Shield, Download, ArrowUpDown, Calendar as CalendarIcon, Upload } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -42,7 +42,7 @@ import {
 import { useUsers } from "@/features/users/hooks/useUsers"
 import { exportToCSV } from "@/lib/utils/export"
 import { toast } from "sonner"
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { doc, updateDoc, serverTimestamp, collection, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/features/auth/AuthContext"
 import { logUserBlock, logUserUnblock } from "@/lib/adminActions"
@@ -51,18 +51,67 @@ export default function UsersPage() {
     const { users, loading } = useUsers()
     const { user } = useAuth()
     const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [sortFilter, setSortFilter] = useState<string>("recent")
+    const [exportRange, setExportRange] = useState<string>("all")
     const [selectedUser, setSelectedUser] = useState<any>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
+    const [isAddUserOpen, setIsAddUserOpen] = useState(false)
     const [actionType, setActionType] = useState<'block' | 'unblock'>('block')
     const [processing, setProcessing] = useState(false)
+    const [newUserData, setNewUserData] = useState({ name: '', email: '', phone: '' })
     const router = useRouter()
 
     const handleExport = () => {
-        const dataToExport = statusFilter === "all"
+        let dataToExport = statusFilter === "all"
             ? users
             : users.filter(u => statusFilter === "blocked" ? u.isBlocked : !u.isBlocked)
-        exportToCSV(dataToExport, `rurboo_users_${statusFilter}_export`)
+
+        if (exportRange !== "all") {
+            const now = new Date();
+            dataToExport = dataToExport.filter(u => {
+                if (!u.createdAt) return false;
+                const uDate = u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt as any);
+                const diffTime = Math.abs(now.getTime() - uDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                switch (exportRange) {
+                    case 'daily': return diffDays <= 1;
+                    case 'weekly': return diffDays <= 7;
+                    case 'monthly': return diffDays <= 30;
+                    case 'quarterly': return diffDays <= 90;
+                    case 'yearly': return diffDays <= 365;
+                    default: return true;
+                }
+            });
+        }
+        exportToCSV(dataToExport, `rurboo_users_${statusFilter}_${exportRange}_export`)
         toast.success(`Exported ${dataToExport.length} users`)
+    }
+
+    const handleAddUser = async () => {
+        if (!newUserData.name || !newUserData.phone) {
+            toast.error("Please provide at least Name and Phone");
+            return;
+        }
+        setProcessing(true);
+        try {
+            await addDoc(collection(db, "users"), {
+                name: newUserData.name,
+                email: newUserData.email,
+                phoneNumber: newUserData.phone,
+                isBlocked: false,
+                createdAt: serverTimestamp(),
+                totalRides: 0
+            });
+            toast.success("User added successfully");
+            setIsAddUserOpen(false);
+            setNewUserData({ name: '', email: '', phone: '' });
+        } catch (error) {
+            console.error("Error adding user", error);
+            toast.error("Failed to add user");
+        } finally {
+            setProcessing(false);
+        }
     }
 
     const openBlockDialog = (userData: any, action: 'block' | 'unblock') => {
@@ -115,11 +164,25 @@ export default function UsersPage() {
     }
 
     // Filter users based on selected status
-    const filteredUsers = statusFilter === "all"
+    let filteredUsers = statusFilter === "all"
         ? users
         : statusFilter === "blocked"
             ? users.filter(u => u.isBlocked)
             : users.filter(u => !u.isBlocked)
+
+    // Sort users based on selection
+    filteredUsers = [...filteredUsers].sort((a, b) => {
+        if (sortFilter === 'alphabetical') {
+            return (a.name || "").localeCompare(b.name || "");
+        } else if (sortFilter === 'top') {
+            return (b.totalRides || 0) - (a.totalRides || 0);
+        } else {
+            // Default: recent
+            const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+            const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+            return bDate - aDate;
+        }
+    });
 
     return (
         <div className="p-8 space-y-8">
@@ -141,7 +204,35 @@ export default function UsersPage() {
                             <SelectItem value="blocked">Blocked ({users.filter(u => u.isBlocked).length})</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={handleExport}>Export CSV</Button>
+                    <Select value={sortFilter} onValueChange={setSortFilter}>
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="recent">Recent Joined</SelectItem>
+                            <SelectItem value="alphabetical">Alphabetical (A-Z)</SelectItem>
+                            <SelectItem value="top">Top Bookings</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="gap-2">
+                                <Download className="h-4 w-4" /> Export CSV
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Timeframe</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setExportRange('daily'); handleExport(); }}>Daily (Today)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('weekly'); handleExport(); }}>Weekly (Last 7 Days)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('monthly'); handleExport(); }}>Monthly (Last 30 Days)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('quarterly'); handleExport(); }}>Quarterly (3 Mos)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('yearly'); handleExport(); }}>Yearly (12 Mos)</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setExportRange('all'); handleExport(); }}>All Time</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button onClick={() => setIsAddUserOpen(true)}>Add User</Button>
                 </div>
             </div>
 
@@ -301,6 +392,52 @@ export default function UsersPage() {
                             className={actionType === 'block' ? 'bg-destructive hover:bg-destructive/90' : ''}
                         >
                             {processing ? 'Processing...' : (actionType === 'block' ? 'Block User' : 'Unblock User')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            {/* Add User Dialog */}
+            <AlertDialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Add New User</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Create a new user profile. They will need to verify their number on the user app to login.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Full Name</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newUserData.name}
+                                onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                                placeholder="Jane Doe"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Phone Number</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newUserData.phone}
+                                onChange={(e) => setNewUserData({ ...newUserData, phone: e.target.value })}
+                                placeholder="+91 9876543210"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Email Address (Optional)</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newUserData.email}
+                                onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                                placeholder="jane@example.com"
+                            />
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleAddUser} disabled={processing}>
+                            {processing ? 'Adding...' : 'Add User'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

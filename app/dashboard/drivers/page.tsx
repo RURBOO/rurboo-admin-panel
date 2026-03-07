@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, ShieldCheck, ShieldAlert, CheckCircle, XCircle } from "lucide-react"
+import { MoreHorizontal, ShieldCheck, ShieldAlert, CheckCircle, XCircle, Download, ArrowUpDown, Calendar as CalendarIcon, Upload } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -42,7 +42,7 @@ import {
 import { useDrivers } from "@/features/drivers/hooks/useDrivers"
 import { exportToCSV } from "@/lib/utils/export"
 import { toast } from "sonner"
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { doc, updateDoc, serverTimestamp, addDoc, collection } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
 import { useAuth } from "@/features/auth/AuthContext"
@@ -52,18 +52,68 @@ export default function DriversPage() {
     const { drivers, loading } = useDrivers()
     const { user } = useAuth()
     const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [sortFilter, setSortFilter] = useState<string>("recent")
+    const [exportRange, setExportRange] = useState<string>("all")
     const [selectedDriver, setSelectedDriver] = useState<any>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
+    const [isAddDriverOpen, setIsAddDriverOpen] = useState(false)
     const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate' | 'verify_vehicle'>('suspend')
     const [processing, setProcessing] = useState(false)
+    const [newDriverData, setNewDriverData] = useState({ name: '', email: '', phone: '' })
     const router = useRouter()
 
     const handleExport = () => {
-        const dataToExport = statusFilter === "all"
+        let dataToExport = statusFilter === "all"
             ? drivers
             : drivers.filter(d => d.status === statusFilter)
-        exportToCSV(dataToExport, `rurboo_drivers_${statusFilter}_export`)
+
+        if (exportRange !== "all") {
+            const now = new Date();
+            dataToExport = dataToExport.filter(d => {
+                if (!d.createdAt) return false;
+                const dDate = d.createdAt?.toDate ? d.createdAt.toDate() : new Date(d.createdAt as any);
+                const diffTime = Math.abs(now.getTime() - dDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                switch (exportRange) {
+                    case 'daily': return diffDays <= 1;
+                    case 'weekly': return diffDays <= 7;
+                    case 'monthly': return diffDays <= 30;
+                    case 'quarterly': return diffDays <= 90;
+                    case 'yearly': return diffDays <= 365;
+                    default: return true;
+                }
+            });
+        }
+        exportToCSV(dataToExport, `rurboo_drivers_${statusFilter}_${exportRange}_export`)
         toast.success(`Exported ${dataToExport.length} drivers`)
+    }
+
+    const handleAddDriver = async () => {
+        if (!newDriverData.name || !newDriverData.phone) {
+            toast.error("Please provide at least Name and Phone");
+            return;
+        }
+        setProcessing(true);
+        try {
+            await addDoc(collection(db, "drivers"), {
+                name: newDriverData.name,
+                email: newDriverData.email,
+                phoneNumber: newDriverData.phone,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+                totalRides: 0,
+                rating: 5.0
+            });
+            toast.success("Driver added successfully");
+            setIsAddDriverOpen(false);
+            setNewDriverData({ name: '', email: '', phone: '' });
+        } catch (error) {
+            console.error("Error adding driver", error);
+            toast.error("Failed to add driver");
+        } finally {
+            setProcessing(false);
+        }
     }
 
     const openActionDialog = (driverData: any, action: 'suspend' | 'approve' | 'activate' | 'verify_vehicle') => {
@@ -139,9 +189,23 @@ export default function DriversPage() {
     }
 
     // Filter drivers based on selected status
-    const filteredDrivers = statusFilter === "all"
+    let filteredDrivers = statusFilter === "all"
         ? drivers
         : drivers.filter(d => d.status === statusFilter)
+
+    // Sort drivers based on selection
+    filteredDrivers = [...filteredDrivers].sort((a, b) => {
+        if (sortFilter === 'alphabetical') {
+            return (a.name || "").localeCompare(b.name || "");
+        } else if (sortFilter === 'top') {
+            return (b.totalRides || 0) - (a.totalRides || 0);
+        } else {
+            // Default: recent
+            const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
+            const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
+            return bDate - aDate;
+        }
+    });
 
     const getStatusBadge = (status: string, verified: boolean) => {
         switch (status) {
@@ -201,15 +265,42 @@ export default function DriversPage() {
                             <SelectValue placeholder="Filter by status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Drivers ({drivers.length})</SelectItem>
-                            <SelectItem value="verified">Verified ({drivers.filter(d => d.status === 'verified').length})</SelectItem>
-                            <SelectItem value="suspended">Suspended ({drivers.filter(d => d.status === 'suspended').length})</SelectItem>
-                            <SelectItem value="blocked">Blocked ({drivers.filter(d => d.status === 'blocked').length})</SelectItem>
-                            <SelectItem value="pending">Pending ({drivers.filter(d => d.status === 'pending').length})</SelectItem>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="verified">Verified</SelectItem>
+                            <SelectItem value="suspended">Suspended</SelectItem>
+                            <SelectItem value="blocked">Blocked</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={handleExport}>Export CSV</Button>
-                    <Button>Add Driver</Button>
+                    <Select value={sortFilter} onValueChange={setSortFilter}>
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="recent">Recent Joined</SelectItem>
+                            <SelectItem value="alphabetical">Alphabetical (A-Z)</SelectItem>
+                            <SelectItem value="top">Top Bookings</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="gap-2">
+                                <Download className="h-4 w-4" /> Export CSV
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Timeframe</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setExportRange('daily'); handleExport(); }}>Daily (Today)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('weekly'); handleExport(); }}>Weekly (Last 7 Days)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('monthly'); handleExport(); }}>Monthly (Last 30 Days)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('quarterly'); handleExport(); }}>Quarterly (3 Mos)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportRange('yearly'); handleExport(); }}>Yearly (12 Mos)</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => { setExportRange('all'); handleExport(); }}>All Time</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button onClick={() => setIsAddDriverOpen(true)}>Add Driver</Button>
                 </div>
             </div>
 
@@ -442,6 +533,52 @@ export default function DriversPage() {
                                     actionType === 'verify_vehicle' ? 'Verify Vehicle' :
                                         actionType === 'approve' ? 'Approve Driver' : 'Activate Driver'
                             )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            {/* Add Driver Dialog */}
+            <AlertDialog open={isAddDriverOpen} onOpenChange={setIsAddDriverOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Add New Driver</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Create a new pending driver profile. They will need to log in and upload their documents.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Full Name</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newDriverData.name}
+                                onChange={(e) => setNewDriverData({ ...newDriverData, name: e.target.value })}
+                                placeholder="John Doe"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Phone Number</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newDriverData.phone}
+                                onChange={(e) => setNewDriverData({ ...newDriverData, phone: e.target.value })}
+                                placeholder="+91 9876543210"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Email Address (Optional)</label>
+                            <input
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={newDriverData.email}
+                                onChange={(e) => setNewDriverData({ ...newDriverData, email: e.target.value })}
+                                placeholder="john@example.com"
+                            />
+                        </div>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleAddDriver} disabled={processing}>
+                            {processing ? 'Adding...' : 'Add Driver'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
