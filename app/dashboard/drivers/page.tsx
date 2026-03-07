@@ -54,7 +54,7 @@ export default function DriversPage() {
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [selectedDriver, setSelectedDriver] = useState<any>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
-    const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate'>('suspend')
+    const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate' | 'verify_vehicle'>('suspend')
     const [processing, setProcessing] = useState(false)
     const router = useRouter()
 
@@ -66,7 +66,7 @@ export default function DriversPage() {
         toast.success(`Exported ${dataToExport.length} drivers`)
     }
 
-    const openActionDialog = (driverData: any, action: 'suspend' | 'approve' | 'activate') => {
+    const openActionDialog = (driverData: any, action: 'suspend' | 'approve' | 'activate' | 'verify_vehicle') => {
         setSelectedDriver(driverData)
         setActionType(action)
         setIsDialogOpen(true)
@@ -77,42 +77,55 @@ export default function DriversPage() {
 
         setProcessing(true)
         try {
-            let newStatus = ''
+            if (actionType === 'verify_vehicle') {
+                await updateDoc(doc(db, "drivers", selectedDriver.id), {
+                    rcStatus: 'approved',
+                    vehicleStatus: 'approved',
+                    rcRejectionReason: null,
+                    vehicleRejectionReason: null,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: user.uid
+                })
 
-            switch (actionType) {
-                case 'suspend':
-                    newStatus = 'suspended'
-                    break
-                case 'approve':
-                case 'activate':
-                    newStatus = 'verified'
-                    break
-            }
-
-            await updateDoc(doc(db, "drivers", selectedDriver.id), {
-                status: newStatus,
-                updatedAt: serverTimestamp(),
-                updatedBy: user.uid
-            })
-
-            // Log the action
-            if (actionType === 'suspend') {
-                await logDriverSuspend(
-                    user.uid,
-                    user.email || "",
-                    selectedDriver.id,
-                    selectedDriver.name || selectedDriver.email,
-                    "Admin action"
-                )
-                toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been suspended`)
+                toast.success(`Vehicle verified for ${selectedDriver.name || selectedDriver.email}`)
             } else {
-                await logDriverApprove(
-                    user.uid,
-                    user.email || "",
-                    selectedDriver.id,
-                    selectedDriver.name || selectedDriver.email
-                )
-                toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been ${actionType === 'approve' ? 'approved' : 'activated'}`)
+                let newStatus = ''
+
+                switch (actionType) {
+                    case 'suspend':
+                        newStatus = 'suspended'
+                        break
+                    case 'approve':
+                    case 'activate':
+                        newStatus = 'verified'
+                        break
+                }
+
+                await updateDoc(doc(db, "drivers", selectedDriver.id), {
+                    status: newStatus,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: user.uid
+                })
+
+                // Log the action
+                if (actionType === 'suspend') {
+                    await logDriverSuspend(
+                        user.uid,
+                        user.email || "",
+                        selectedDriver.id,
+                        selectedDriver.name || selectedDriver.email,
+                        "Admin action"
+                    )
+                    toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been suspended`)
+                } else {
+                    await logDriverApprove(
+                        user.uid,
+                        user.email || "",
+                        selectedDriver.id,
+                        selectedDriver.name || selectedDriver.email
+                    )
+                    toast.success(`Driver ${selectedDriver.name || selectedDriver.email} has been ${actionType === 'approve' ? 'approved' : 'activated'}`)
+                }
             }
 
             setIsDialogOpen(false)
@@ -289,6 +302,15 @@ export default function DriversPage() {
                                                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rides?driverId=${driver.id}`); }}>
                                                         View Ride History
                                                     </DropdownMenuItem>
+                                                    {driver.rcStatus !== 'approved' || driver.vehicleStatus !== 'approved' ? (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'verify_vehicle'); }}
+                                                            className="text-blue-600"
+                                                        >
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Verify Vehicle
+                                                        </DropdownMenuItem>
+                                                    ) : null}
                                                     <DropdownMenuSeparator />
                                                     {driver.status === 'pending' && (
                                                         <DropdownMenuItem
@@ -354,6 +376,11 @@ export default function DriversPage() {
                                     <ShieldAlert className="h-5 w-5 text-destructive" />
                                     Suspend Driver
                                 </>
+                            ) : actionType === 'verify_vehicle' ? (
+                                <>
+                                    <CheckCircle className="h-5 w-5 text-blue-600" />
+                                    Verify Vehicle
+                                </>
                             ) : (
                                 <>
                                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -388,6 +415,12 @@ export default function DriversPage() {
                                     <br />
                                     Make sure you've verified all documents before approving.
                                 </>
+                            ) : actionType === 'verify_vehicle' ? (
+                                <>
+                                    Are you sure you want to verify the vehicle for <strong>{selectedDriver?.name || selectedDriver?.email}</strong>?
+                                    <br /><br />
+                                    This will automatically mark their <strong>Registration (RC)</strong> and <strong>Vehicle Photo</strong> as Approved.
+                                </>
                             ) : (
                                 <>
                                     Are you sure you want to activate <strong>{selectedDriver?.name || selectedDriver?.email}</strong>?
@@ -402,11 +435,12 @@ export default function DriversPage() {
                         <AlertDialogAction
                             onClick={handleStatusUpdate}
                             disabled={processing}
-                            className={actionType === 'suspend' ? 'bg-destructive hover:bg-destructive/90' : 'bg-green-600 hover:bg-green-700'}
+                            className={actionType === 'suspend' ? 'bg-destructive hover:bg-destructive/90' : actionType === 'verify_vehicle' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
                         >
                             {processing ? 'Processing...' : (
                                 actionType === 'suspend' ? 'Suspend Driver' :
-                                    actionType === 'approve' ? 'Approve Driver' : 'Activate Driver'
+                                    actionType === 'verify_vehicle' ? 'Verify Vehicle' :
+                                        actionType === 'approve' ? 'Approve Driver' : 'Activate Driver'
                             )}
                         </AlertDialogAction>
                     </AlertDialogFooter>
