@@ -15,7 +15,8 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { useLiveLocations } from "@/features/map/hooks/useLiveLocations"
-import { MapPin, Bike, Car, User } from "lucide-react"
+import { useAdminRole } from "@/features/admin/hooks/useAdminRole"
+import { MapPin, Bike, Car, User, Lock } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 
@@ -43,6 +44,9 @@ function LiveMapContent() {
     const [selectedLocation, setSelectedLocation] = useState<any>(null)
     const [vehicleFilter, setVehicleFilter] = useState<string>("all")
     const [viewMode, setViewMode] = useState<'drivers' | 'users'>('drivers')
+
+    // Auth & Roles
+    const { isSuperAdmin, adminData, loading: roleLoading } = useAdminRole()
 
     // Get API key from environment
     const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
@@ -93,6 +97,43 @@ function LiveMapContent() {
         // In a real implementation, you'd return different marker icons
         // based on vehicle type. For now, we'll use default markers
         return undefined
+    }
+
+    // Role-based Access Check
+    if (roleLoading) {
+        return (
+            <div className="flex items-center justify-center p-8 h-[600px]">
+                <div className="text-center space-y-4">
+                    <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+                    <p className="text-muted-foreground">Verifying access...</p>
+                </div>
+            </div>
+        )
+    }
+
+    const hasMapAccess = isSuperAdmin || adminData?.role === 'admin'
+
+    if (!hasMapAccess) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+                <Card className="w-full max-w-md shadow-lg border-muted">
+                    <CardContent className="pt-10 pb-8 px-8 text-center space-y-6">
+                        <div className="mx-auto w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center">
+                            <Lock className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold tracking-tight">Access Restricted</h2>
+                            <p className="text-muted-foreground">
+                                Detailed live tracking is restricted to <span className="font-semibold text-foreground">Super Admins</span> and <span className="font-semibold text-foreground">Admins</span>.
+                            </p>
+                        </div>
+                        <Button className="w-full" variant="outline" asChild>
+                            <Link href="/dashboard">Return to Dashboard</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        )
     }
 
     if (!MAPS_API_KEY) {

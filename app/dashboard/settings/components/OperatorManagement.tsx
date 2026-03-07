@@ -25,17 +25,18 @@ import {
 import { useOperators } from "@/features/admin/hooks/useOperators"
 import { useAdminRole } from "@/features/admin/hooks/useAdminRole"
 import { useAuth } from "@/features/auth/AuthContext"
-import { Plus, Trash2, Shield, ShieldAlert, PauseCircle, PlayCircle } from "lucide-react"
+import { Plus, Trash2, Shield, ShieldAlert, PauseCircle, PlayCircle, Edit2 } from "lucide-react"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
 import { Timestamp } from "firebase/firestore"
 
 export function OperatorManagement() {
     const { user } = useAuth()
-    const { operators, loading, deleteOperator, updateOperatorStatus, refreshOperators } = useOperators()
+    const { operators, loading, deleteOperator, updateOperatorStatus, editOperator, refreshOperators } = useOperators()
     const { isSuperAdmin, adminData } = useAdminRole()
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [selectedOperator, setSelectedOperator] = useState<any>(null)
     const [processing, setProcessing] = useState(false)
     const [suspendingId, setSuspendingId] = useState<string | null>(null)
@@ -44,6 +45,18 @@ export function OperatorManagement() {
         email: "",
         password: "",
         name: "",
+        role: "operator" as 'super_admin' | 'admin' | 'operator',
+        permissions: {
+            manageDrivers: false,
+            manageUsers: false,
+            managePricing: false,
+            manageAdmins: false,
+            viewFinance: false,
+            manageSOS: false,
+        }
+    })
+
+    const [editFormData, setEditFormData] = useState({
         role: "operator" as 'super_admin' | 'admin' | 'operator',
         permissions: {
             manageDrivers: false,
@@ -171,6 +184,44 @@ export function OperatorManagement() {
         }
     }
 
+    const openEditDialog = (operator: any) => {
+        setSelectedOperator(operator)
+        setEditFormData({
+            role: operator.role || 'operator',
+            permissions: {
+                manageDrivers: operator.permissions?.manageDrivers || false,
+                manageUsers: operator.permissions?.manageUsers || false,
+                managePricing: operator.permissions?.managePricing || false,
+                manageAdmins: operator.permissions?.manageAdmins || false,
+                viewFinance: operator.permissions?.viewFinance || false,
+                manageSOS: operator.permissions?.manageSOS || false,
+            }
+        })
+        setIsEditDialogOpen(true)
+    }
+
+    const handleEditOperator = async () => {
+        if (!selectedOperator) return
+        setProcessing(true)
+        try {
+            const result = await editOperator(selectedOperator.adminId, editFormData.role, editFormData.permissions)
+
+            if (result.success) {
+                toast.success(`Operator ${selectedOperator.name} updated successfully!`)
+                setIsEditDialogOpen(false)
+                setSelectedOperator(null)
+                // Note: operators list is automatically updated in the hook via optimistic UI
+            } else {
+                toast.error("Failed to update operator")
+            }
+        } catch (error) {
+            console.error("Error updating operator:", error)
+            toast.error("Failed to update operator. Please try again.")
+        } finally {
+            setProcessing(false)
+        }
+    }
+
     const resetForm = () => {
         setFormData({
             email: "", password: "", name: "", role: "operator",
@@ -183,6 +234,10 @@ export function OperatorManagement() {
 
     const updatePermission = (key: keyof typeof formData.permissions, value: boolean) => {
         setFormData(prev => ({ ...prev, permissions: { ...prev.permissions, [key]: value } }))
+    }
+
+    const updateEditPermission = (key: keyof typeof editFormData.permissions, value: boolean) => {
+        setEditFormData(prev => ({ ...prev, permissions: { ...prev.permissions, [key]: value } }))
     }
 
     if (!isSuperAdmin) return null
@@ -254,6 +309,14 @@ export function OperatorManagement() {
                                                     {operator.status === 'active'
                                                         ? <PauseCircle className="h-4 w-4 text-amber-500" />
                                                         : <PlayCircle className="h-4 w-4 text-green-500" />}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => openEditDialog(operator)}
+                                                    title="Edit Permissions"
+                                                >
+                                                    <Edit2 className="h-4 w-4 text-blue-500" />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -397,6 +460,70 @@ export function OperatorManagement() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Edit Operator Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Operator Access</DialogTitle>
+                        <DialogDescription>
+                            Modify role and permissions for <strong>{selectedOperator?.name}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-role">Role</Label>
+                            <Select value={editFormData.role} onValueChange={(value: any) => setEditFormData(prev => ({ ...prev, role: value }))}>
+                                <SelectTrigger id="edit-role">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="operator">Operator</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <Label>Permissions</Label>
+                            <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                                {[
+                                    { key: "manageDrivers", label: "Manage Drivers" },
+                                    { key: "manageUsers", label: "Manage Users" },
+                                    { key: "managePricing", label: "Manage Pricing" },
+                                    { key: "viewFinance", label: "View Finance" },
+                                    { key: "manageSOS", label: "Manage SOS/Risk" },
+                                    { key: "manageAdmins", label: "Manage Admins", superAdminOnly: true },
+                                ].map(({ key, label, superAdminOnly }) => (
+                                    <div key={key} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor={`edit-perm-${key}`} className="font-normal">{label}</Label>
+                                            {superAdminOnly && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 min-h-[16px] leading-[14px]">Super Admin</Badge>}
+                                        </div>
+                                        <Switch
+                                            id={`edit-perm-${key}`}
+                                            checked={editFormData.permissions[key as keyof typeof editFormData.permissions]}
+                                            onCheckedChange={(checked: boolean) => updateEditPermission(key as any, checked)}
+                                            disabled={superAdminOnly && editFormData.role !== 'super_admin'}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={processing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleEditOperator} disabled={processing}>
+                            {processing ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     )
 }

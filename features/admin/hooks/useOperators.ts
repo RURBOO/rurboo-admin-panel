@@ -53,6 +53,19 @@ export function useOperators() {
         }
     }
 
+    const editOperator = async (adminId: string, role: string, permissions: AdminData['permissions']) => {
+        try {
+            await updateDoc(doc(db, "admins", adminId), { role, permissions })
+            setOperators(prev => prev.map(op =>
+                op.adminId === adminId ? { ...op, role: role as any, permissions } : op
+            ))
+            return { success: true }
+        } catch (error) {
+            console.error("Error editing operator:", error)
+            return { success: false, error }
+        }
+    }
+
     const refreshOperators = () => {
         fetchOperators()
     }
@@ -62,6 +75,7 @@ export function useOperators() {
         loading,
         deleteOperator,
         updateOperatorStatus,
+        editOperator,
         refreshOperators
     }
 }
