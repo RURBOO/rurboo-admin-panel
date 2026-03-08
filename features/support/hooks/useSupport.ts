@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, updateDoc, getDoc } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, where, addDoc, serverTimestamp, doc, updateDoc, getDoc, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { DateRange } from "react-day-picker"
 
 export interface SupportTicket {
     id: string;
@@ -17,16 +18,27 @@ export interface SupportTicket {
     name?: string;
 }
 
-export function useSupport() {
+export function useSupport(dateRange?: DateRange) {
     const [tickets, setTickets] = useState<SupportTicket[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         // Updated to listen to 'support_tickets' (User App Feature)
-        const q = query(
-            collection(db, "support_tickets"),
-            orderBy("createdAt", "desc")
-        )
+        let q = query(collection(db, "support_tickets"))
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                q = query(q,
+                    where("createdAt", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("createdAt", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                q = query(q, where("createdAt", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
+
+        // Add orderBy after where clauses
+        q = query(q, orderBy("createdAt", "desc"))
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             const rawDocs: any[] = []

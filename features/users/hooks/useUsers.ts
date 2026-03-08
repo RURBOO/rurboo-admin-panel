@@ -1,19 +1,29 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch, getCountFromServer, where } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch, getCountFromServer, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { User } from "@/lib/types"
+import { DateRange } from "react-day-picker"
 
-export function useUsers() {
+export function useUsers(dateRange?: DateRange) {
     const [users, setUsers] = useState<User[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         // Listen to 'users' collection
-        // Note: If users collection is large, pagination is required. 
-        // For Admin MVP, we limit to recent 50 or similar, but let's fetch all for now.
-        const q = query(collection(db, "users"))
+        let q = query(collection(db, "users"))
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                q = query(q,
+                    where("createdAt", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("createdAt", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                q = query(q, where("createdAt", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             const rawDocs: any[] = []

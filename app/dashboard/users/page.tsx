@@ -39,8 +39,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 import { useUsers } from "@/features/users/hooks/useUsers"
-import { exportToCSV } from "@/lib/utils/export"
+import { exportToExcel } from "@/lib/exportUtils"
 import { toast } from "sonner"
 import { doc, updateDoc, serverTimestamp, collection, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -48,7 +49,8 @@ import { useAuth } from "@/features/auth/AuthContext"
 import { logUserBlock, logUserUnblock } from "@/lib/adminActions"
 
 export default function UsersPage() {
-    const { users, loading } = useUsers()
+    const [dateRange, setDateRange] = useState<{ from: Date, to?: Date } | undefined>()
+    const { users, loading } = useUsers(dateRange)
     const { user } = useAuth()
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [sortFilter, setSortFilter] = useState<string>("recent")
@@ -62,30 +64,17 @@ export default function UsersPage() {
     const router = useRouter()
 
     const handleExport = () => {
-        let dataToExport = statusFilter === "all"
-            ? users
-            : users.filter(u => statusFilter === "blocked" ? u.isBlocked : !u.isBlocked)
+        const dataToExport = filteredUsers.map(u => ({
+            "Name": u.name || "N/A",
+            "Email": u.email || "N/A",
+            "Phone Number": u.phoneNumber || "N/A",
+            "Joined Date": new Date(u.createdAt?.toDate?.() || Date.now()).toLocaleDateString(),
+            "Total Rides": u.totalRides || 0,
+            "Blocked": u.isBlocked ? "Yes" : "No"
+        }))
 
-        if (exportRange !== "all") {
-            const now = new Date();
-            dataToExport = dataToExport.filter(u => {
-                if (!u.createdAt) return false;
-                const uDate = u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt as any);
-                const diffTime = Math.abs(now.getTime() - uDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                switch (exportRange) {
-                    case 'daily': return diffDays <= 1;
-                    case 'weekly': return diffDays <= 7;
-                    case 'monthly': return diffDays <= 30;
-                    case 'quarterly': return diffDays <= 90;
-                    case 'yearly': return diffDays <= 365;
-                    default: return true;
-                }
-            });
-        }
-        exportToCSV(dataToExport, `rurboo_users_${statusFilter}_${exportRange}_export`)
-        toast.success(`Exported ${dataToExport.length} users`)
+        exportToExcel(dataToExport, `Rurboo_Users_Export`)
+        toast.success(`Exported ${dataToExport.length} users to Excel`)
     }
 
     const handleAddUser = async () => {
@@ -214,24 +203,12 @@ export default function UsersPage() {
                             <SelectItem value="top">Top Bookings</SelectItem>
                         </SelectContent>
                     </Select>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="gap-2">
-                                <Download className="h-4 w-4" /> Export CSV
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Timeframe</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => { setExportRange('daily'); handleExport(); }}>Daily (Today)</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setExportRange('weekly'); handleExport(); }}>Weekly (Last 7 Days)</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setExportRange('monthly'); handleExport(); }}>Monthly (Last 30 Days)</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setExportRange('quarterly'); handleExport(); }}>Quarterly (3 Mos)</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setExportRange('yearly'); handleExport(); }}>Yearly (12 Mos)</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => { setExportRange('all'); handleExport(); }}>All Time</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+
+                    <DatePickerWithRange date={dateRange} setDate={setDateRange as any} />
+
+                    <Button variant="outline" className="gap-2" onClick={handleExport}>
+                        <Download className="h-4 w-4" /> Export Excel
+                    </Button>
                     <Button onClick={() => setIsAddUserOpen(true)}>Add User</Button>
                 </div>
             </div>

@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, where, orderBy, limit } from "firebase/firestore"
+import { collection, onSnapshot, query, where, orderBy, limit, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Ride } from "@/lib/types"
+import { DateRange } from "react-day-picker"
 
-export function useFinance() {
+export function useFinance(dateRange?: DateRange) {
     const [stats, setStats] = useState({
         totalRevenue: 0,
         platformCommission: 0,
@@ -16,12 +17,21 @@ export function useFinance() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // We calculate finance from Completed Rides
-        // In a real production app, you'd query a dedicated 'transactions' collection
-        const q = query(
+        let q = query(
             collection(db, "rideRequests"),
             where("status", "in", ["completed", "closed"])
         )
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                q = query(q,
+                    where("createdAt", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("createdAt", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                q = query(q, where("createdAt", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let totalRev = 0
@@ -69,11 +79,26 @@ export function useFinance() {
         })
 
         // Fetch Real Ledger Entries
-        const ledgerQ = query(
-            collection(db, "ledger_entries"),
-            orderBy("timestamp", "desc"),
-            limit(50)
-        )
+        let ledgerQ = query(collection(db, "ledger_entries"))
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                ledgerQ = query(ledgerQ,
+                    where("timestamp", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("timestamp", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                ledgerQ = query(ledgerQ, where("timestamp", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
+
+        // Add sorting constraints after range limits
+        ledgerQ = query(ledgerQ, orderBy("timestamp", "desc"))
+
+        if (!dateRange?.from) {
+            ledgerQ = query(ledgerQ, limit(50))
+        }
+
         const unsubscribeLedger = onSnapshot(ledgerQ, (snapshot) => {
             const entries: any[] = []
             snapshot.forEach(doc => {

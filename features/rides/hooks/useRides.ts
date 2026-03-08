@@ -1,20 +1,34 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, limit, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Ride } from "@/lib/types"
+import { DateRange } from "react-day-picker"
 
-export function useRides() {
+export function useRides(dateRange?: DateRange) {
     const [rides, setRides] = useState<Ride[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Listen to 'rideRequests' collection, ordered by createdAt desc
-        const q = query(
-            collection(db, "rideRequests"),
-            limit(100)
-        )
+        // Listen to 'rideRequests' collection
+        let q = query(collection(db, "rideRequests"))
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                q = query(q,
+                    where("createdAt", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("createdAt", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                q = query(q, where("createdAt", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
+
+        // Apply limit based on whether it's filtered or not
+        if (!dateRange?.from) {
+            q = query(q, limit(100))
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const ridesData: Ride[] = []

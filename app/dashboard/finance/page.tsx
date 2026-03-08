@@ -13,15 +13,29 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DollarSign, Download, ArrowUpRight, ArrowDownRight, RefreshCw } from "lucide-react"
 import { useFinance } from "@/features/finance/hooks/useFinance"
-import { exportToCSV } from "@/lib/utils/export"
+import { exportToExcel } from "@/lib/exportUtils"
 import { useState } from "react"
 import { CheckCircle } from "lucide-react"
+import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { toast } from "sonner"
 
 export default function FinancePage() {
-    const { stats, loading } = useFinance()
+    const [dateRange, setDateRange] = useState<{ from: Date, to?: Date } | undefined>()
+    const { stats, loading } = useFinance(dateRange)
 
     const handleExport = () => {
-        exportToCSV(stats.recentTransactions, "rurboo_finance_transactions")
+        const dataToExport = stats.recentTransactions.map(txn => ({
+            "TXN ID": txn.id,
+            "Driver": txn.driverId,
+            "Ride ID": txn.rideId,
+            "Fare": txn.amount,
+            "Commission (20%)": txn.platformFee,
+            "Status": txn.status,
+            "Date": txn.date
+        }))
+
+        exportToExcel(dataToExport, "Rurboo_Finance_Recent_Export")
+        toast.success(`Exported ${dataToExport.length} transaction logs`)
     }
 
     const formatCurrency = (amount: number) => {
@@ -58,7 +72,8 @@ export default function FinancePage() {
                             Ledger Audit
                         </Button>
                     </div>
-                    <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" /> Export CSV</Button>
+                    <DatePickerWithRange date={dateRange} setDate={setDateRange as any} />
+                    <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" /> Export Excel</Button>
                     <Button>Process Settlements</Button>
                 </div>
             </div>

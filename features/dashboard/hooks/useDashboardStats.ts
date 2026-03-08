@@ -14,6 +14,12 @@ export interface VehicleRevenue {
     value: number
 }
 
+export interface RegistrationPoint {
+    date: string
+    users: number
+    drivers: number
+}
+
 export interface DashboardStats {
     totalRevenue: number
     platformRevenue: number
@@ -22,6 +28,8 @@ export interface DashboardStats {
     activeRides: number
     revenueData: RevenuePoint[]
     vehicleRevenueData: VehicleRevenue[]
+    ridesBreakdownData: { name: string; value: number }[]
+    registrationGrowthData: RegistrationPoint[]
     loading: boolean
 }
 
@@ -35,6 +43,8 @@ export function useDashboardStats() {
         activeRides: 0,
         revenueData: [],
         vehicleRevenueData: [],
+        ridesBreakdownData: [],
+        registrationGrowthData: [],
         loading: true
     })
 
@@ -112,6 +122,60 @@ export function useDashboardStats() {
                     }
                 })
 
+                // Get Rides Breakdown (Completed vs Cancelled)
+                const completedCount = await getCountFromServer(query(collection(db, "rideRequests"), where("status", "==", "completed")))
+                const cancelledCount = await getCountFromServer(query(collection(db, "rideRequests"), where("status", "==", "cancelled")))
+                const ridesBreakdownData = [
+                    { name: 'Completed', value: completedCount.data().count },
+                    { name: 'Cancelled', value: cancelledCount.data().count }
+                ]
+
+                // Get Registration Growth over last 7 days
+                const recentUsersQuery = query(collection(db, "users"), where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)))
+                const recentDriversQuery = query(collection(db, "drivers"), where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)))
+
+                const [recentUsersSnap, recentDriversSnap] = await Promise.all([
+                    getDocs(recentUsersQuery),
+                    getDocs(recentDriversQuery)
+                ])
+
+                const growthMap = new Map<string, { users: number, drivers: number }>()
+
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date()
+                    d.setDate(now.getDate() - i)
+                    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    growthMap.set(dateStr, { users: 0, drivers: 0 })
+                }
+
+                recentUsersSnap.docs.forEach(doc => {
+                    const data = doc.data()
+                    if (data.createdAt) {
+                        const dateObj = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+                        const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        if (growthMap.has(dateStr)) {
+                            growthMap.set(dateStr, { ...growthMap.get(dateStr)!, users: growthMap.get(dateStr)!.users + 1 })
+                        }
+                    }
+                })
+
+                recentDriversSnap.docs.forEach(doc => {
+                    const data = doc.data()
+                    if (data.createdAt) {
+                        const dateObj = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+                        const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        if (growthMap.has(dateStr)) {
+                            growthMap.set(dateStr, { ...growthMap.get(dateStr)!, drivers: growthMap.get(dateStr)!.drivers + 1 })
+                        }
+                    }
+                })
+
+                const registrationGrowthData = Array.from(growthMap.entries()).map(([date, counts]) => ({
+                    date,
+                    users: counts.users,
+                    drivers: counts.drivers
+                }))
+
                 const revenueData = Array.from(dailyRevenueMap.entries()).map(([date, value]) => ({
                     date,
                     value
@@ -131,6 +195,8 @@ export function useDashboardStats() {
                         activeRides: activeRidesCount,
                         revenueData,
                         vehicleRevenueData,
+                        ridesBreakdownData,
+                        registrationGrowthData,
                         loading: false
                     })
                 }

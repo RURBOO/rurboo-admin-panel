@@ -1,17 +1,29 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore"
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDoc, serverTimestamp, writeBatch, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
+import { DateRange } from "react-day-picker"
 
-export function useDrivers() {
+export function useDrivers(dateRange?: DateRange) {
     const [drivers, setDrivers] = useState<Driver[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         // Listen to 'drivers' collection
-        const q = query(collection(db, "drivers"))
+        let q = query(collection(db, "drivers"))
+
+        if (dateRange?.from) {
+            if (dateRange.to) {
+                q = query(q,
+                    where("createdAt", ">=", Timestamp.fromDate(dateRange.from)),
+                    where("createdAt", "<=", Timestamp.fromDate(new Date(dateRange.to.setHours(23, 59, 59, 999))))
+                )
+            } else {
+                q = query(q, where("createdAt", ">=", Timestamp.fromDate(dateRange.from)))
+            }
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const driversData: Driver[] = []

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useDashboardStats } from "@/features/dashboard/hooks/useDashboardStats"
 import { useVehicleRideStats } from "@/features/dashboard/hooks/useVehicleRideStats"
 import { useUserOnboarding, TimePeriod } from "@/features/dashboard/hooks/useUserOnboarding"
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line, Legend } from 'recharts'
 
 import {
     Select,
@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function DashboardPage() {
-    const { totalRevenue, platformRevenue, activeDrivers, totalUsers, activeRides, revenueData, vehicleRevenueData, loading } = useDashboardStats()
+    const { totalRevenue, platformRevenue, activeDrivers, totalUsers, activeRides, revenueData, vehicleRevenueData, ridesBreakdownData, registrationGrowthData, loading } = useDashboardStats()
 
     const { totalRides, todayRides, vehicleStats, loading: ridesLoading } = useVehicleRideStats()
     const [onboardingPeriod, setOnboardingPeriod] = useState<TimePeriod>('daily')
@@ -250,29 +250,52 @@ export default function DashboardPage() {
                 </Card>
                 <Card className="col-span-4">
                     <CardHeader>
-                        <CardTitle>Platform Earnings</CardTitle>
+                        <CardTitle>Platform Earnings & Ride Outcomes</CardTitle>
                         <CardDescription>
-                            Comparison of Net Revenue vs Platform Commission.
+                            Net Revenue vs Platform Commission, alongside active Ride Completion rates.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="h-[300px] flex items-center justify-center">
-                            <div className="text-center space-y-4">
+                        <div className="flex h-[300px] items-center justify-between gap-4">
+                            <div className="text-center space-y-4 flex-1 border-r pr-4">
                                 <TrendingUp className="h-12 w-12 text-primary mx-auto opacity-20" />
                                 <div>
                                     <div className="text-4xl font-bold">{formatCurrency(platformRevenue)}</div>
-                                    <div className="text-sm text-muted-foreground mt-1">Platform has retained {((platformRevenue / (totalRevenue || 1)) * 100).toFixed(1)}% of total volume</div>
+                                    <div className="text-sm text-muted-foreground mt-1">Platform has retained {((platformRevenue / (totalRevenue || 1)) * 100).toFixed(1)}% of volume</div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-8 pt-4">
+                                <div className="grid grid-cols-2 gap-4 pt-4">
                                     <div className="text-left">
                                         <div className="text-sm font-medium text-muted-foreground">Driver Payouts</div>
-                                        <div className="text-xl font-bold">{formatCurrency(totalRevenue - platformRevenue)}</div>
+                                        <div className="text-lg font-bold">{formatCurrency(totalRevenue - platformRevenue)}</div>
                                     </div>
-                                    <div className="text-left border-l pl-8">
+                                    <div className="text-left border-l pl-4">
                                         <div className="text-sm font-medium text-muted-foreground">Platform Fee</div>
-                                        <div className="text-xl font-bold text-green-600">{formatCurrency(platformRevenue)}</div>
+                                        <div className="text-lg font-bold text-green-600">{formatCurrency(platformRevenue)}</div>
                                     </div>
                                 </div>
+                            </div>
+                            <div className="flex-1 h-full pl-4 relative">
+                                {loading ? <Skeleton className="w-full h-full" /> : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={ridesBreakdownData || []}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={90}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {ridesBreakdownData?.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.name === 'Completed' ? '#10b981' : '#ef4444'} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }} />
+                                            <Legend verticalAlign="bottom" height={36} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -286,57 +309,41 @@ export default function DashboardPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5" />
-                                User Growth
+                                <Users className="h-5 w-5" />
+                                Platform Acquisition
                             </CardTitle>
-                            <Select value={onboardingPeriod} onValueChange={(value) => setOnboardingPeriod(value as TimePeriod)}>
-                                <SelectTrigger className="w-[120px]">
-                                    <SelectValue placeholder="Period" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="daily">Daily</SelectItem>
-                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                </SelectContent>
-                            </Select>
                         </div>
+                        <CardDescription>Registration growth over the last 7 days</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-4">
-                                <div className="flex-1">
-                                    <div className="text-sm text-muted-foreground">New Users ({onboardingPeriod})</div>
-                                    {onboardingLoading ? (
-                                        <Skeleton className="h-8 w-20 mt-1" />
-                                    ) : (
-                                        <div className="text-3xl font-bold">
-                                            {totalInPeriod.toLocaleString()}
-                                        </div>
-                                    )}
-                                </div>
-                                <Calendar className="h-8 w-8 text-muted-foreground opacity-50" />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <div className="text-sm font-medium">Recent Activity:</div>
-                                {onboardingLoading ? (
-                                    <div className="space-y-2">
-                                        <Skeleton className="h-6 w-full" />
-                                        <Skeleton className="h-6 w-full" />
-                                    </div>
-                                ) : onboardingData.length === 0 ? (
-                                    <div className="text-sm text-muted-foreground">No data available</div>
-                                ) : (
-                                    <div className="grid gap-1 max-h-[150px] overflow-y-auto pr-1">
-                                        {onboardingData.slice(-5).reverse().map((item, idx) => (
-                                            <div key={idx} className="flex items-center justify-between text-sm border-b border-border/50 last:border-0 pb-2">
-                                                <span className="text-muted-foreground">{item.date}</span>
-                                                <span className="font-medium bg-secondary px-2 py-0.5 rounded text-xs">{item.count} users</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="h-[250px] w-full mt-4">
+                            {loading ? (
+                                <Skeleton className="h-full w-full" />
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={registrationGrowthData}>
+                                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+                                        <XAxis
+                                            dataKey="date"
+                                            stroke="#888888"
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                        />
+                                        <YAxis
+                                            stroke="#888888"
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            allowDecimals={false}
+                                        />
+                                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }} />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="users" name="New Users" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                        <Line type="monotone" dataKey="drivers" name="New Drivers" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
