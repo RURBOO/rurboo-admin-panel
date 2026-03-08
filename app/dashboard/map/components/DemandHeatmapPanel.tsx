@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { GoogleMap, LoadScript, HeatmapLayer } from "@react-google-maps/api"
-import { Flame, Car, MapPin, TrendingUp, RefreshCw } from "lucide-react"
+import { Flame, Car, MapPin, TrendingUp, RefreshCw, Loader2 } from "lucide-react"
+import { doc, onSnapshot } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 const mapContainerStyle = {
     width: '100%',
@@ -16,30 +18,33 @@ const defaultCenter = {
     lng: 77.2090
 }
 
-// Mocked Heatmap Data focusing around New Delhi CP & Airport
-const MOCK_DEMAND_POINTS = [
-    { lat: 28.6304, lng: 77.2177, weight: 10 }, // CP
-    { lat: 28.6280, lng: 77.2120, weight: 8 },
-    { lat: 28.6250, lng: 77.2090, weight: 7 },
-    { lat: 28.5562, lng: 77.1000, weight: 15 }, // Airport
-    { lat: 28.5580, lng: 77.0980, weight: 12 },
-    { lat: 28.5600, lng: 77.1020, weight: 9 },
-    { lat: 28.5400, lng: 77.1500, weight: 5 }, // Vasant Kunj
-    { lat: 28.5420, lng: 77.1530, weight: 6 },
-]
-
 export function DemandHeatmapPanel() {
     const [layerType, setLayerType] = useState<'demand' | 'supply'>('demand')
     const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
+    const [points, setPoints] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const unsubscribe = onSnapshot(doc(db, "configs", "demand_heatmap"), (docSnap) => {
+            if (docSnap.exists() && docSnap.data().points) {
+                setPoints(docSnap.data().points)
+            } else {
+                // If not available, fallback gracefully or provide default data structure
+                setPoints([])
+            }
+            setLoading(false)
+        })
+        return () => unsubscribe()
+    }, [])
 
     const heatmapData = useMemo(() => {
-        if (typeof window === "undefined" || !window.google) return []
+        if (typeof window === "undefined" || !window.google || points.length === 0) return []
 
-        return MOCK_DEMAND_POINTS.map(point => ({
+        return points.map(point => ({
             location: new window.google.maps.LatLng(point.lat, point.lng),
             weight: layerType === 'demand' ? point.weight : Math.max(1, 10 - point.weight)
         }))
-    }, [layerType])
+    }, [layerType, points])
 
     return (
         <div className="space-y-6">
@@ -108,6 +113,10 @@ export function DemandHeatmapPanel() {
                     {!MAPS_API_KEY ? (
                         <div className="flex items-center justify-center h-[600px] bg-muted/20 border-2 border-dashed rounded-lg">
                             <p className="text-muted-foreground text-center">Google Maps API Key missing in environment.<br />Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to view heatmaps.</p>
+                        </div>
+                    ) : loading ? (
+                        <div className="flex items-center justify-center h-[600px] bg-muted/20 border-2 border-dashed rounded-lg">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground opacity-50" />
                         </div>
                     ) : (
                         <div className="relative rounded-lg overflow-hidden border">

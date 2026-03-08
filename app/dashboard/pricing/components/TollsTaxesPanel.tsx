@@ -1,20 +1,52 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Banknote, Save, Plus, Trash2, PlaneTakeoff } from "lucide-react"
+import { Banknote, Save, Plus, Trash2, PlaneTakeoff, Loader2 } from "lucide-react"
+import { doc, getDoc, setDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
 
 export function TollsTaxesPanel() {
-    const [tolls, setTolls] = useState([
-        { id: 1, name: "International Airport Pickup", amount: 150, type: "fixed" },
-        { id: 2, name: "City Toll (MCD)", amount: 100, type: "fixed" }
-    ])
+    const [tolls, setTolls] = useState<any[]>([])
+    const [taxes, setTaxes] = useState({ gst: 0, serviceCharge: 0 })
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
 
-    const [taxes, setTaxes] = useState({
-        gst: 5,
-        serviceCharge: 2
-    })
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const docSnap = await getDoc(doc(db, "configs", "pricing_surcharges"))
+                if (docSnap.exists()) {
+                    const data = docSnap.data()
+                    if (data.tolls) setTolls(data.tolls)
+                    if (data.taxes) setTaxes(data.taxes)
+                }
+            } catch (error) {
+                console.error("Error fetching pricing configs", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchConfig()
+    }, [])
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await setDoc(doc(db, "configs", "pricing_surcharges"), {
+                tolls,
+                taxes
+            }, { merge: true })
+            toast.success("Surcharges and Taxes saved successfully!")
+        } catch (error) {
+            console.error(error)
+            toast.error("Failed to save configuration.")
+        } finally {
+            setSaving(false)
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -23,8 +55,8 @@ export function TollsTaxesPanel() {
                     <h3 className="text-xl font-medium">Tolls, Airport & Taxes</h3>
                     <p className="text-sm text-muted-foreground">Manage automatic surcharges applied to specific routes and global tax rates.</p>
                 </div>
-                <Button>
-                    <Save className="h-4 w-4 mr-2" />
+                <Button onClick={handleSave} disabled={loading || saving}>
+                    {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                     Save Configuration
                 </Button>
             </div>
@@ -69,14 +101,22 @@ export function TollsTaxesPanel() {
                                             setTolls(newTolls);
                                         }} />
                                     </div>
-                                    <Button variant="ghost" size="sm" className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 mt-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 mt-2"
+                                        onClick={() => setTolls(tolls.filter((_, i) => i !== idx))}
+                                    >
                                         <Trash2 className="h-4 w-4 mr-2" /> Delete
                                     </Button>
                                 </CardContent>
                             </Card>
                         ))}
 
-                        <Card className="border-dashed flex flex-col items-center justify-center p-6 text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer min-h-[200px]">
+                        <Card
+                            className="border-dashed flex flex-col items-center justify-center p-6 text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer min-h-[200px]"
+                            onClick={() => setTolls([...tolls, { id: Date.now(), name: "New Surcharge", amount: 0, type: "fixed" }])}
+                        >
                             <Plus className="h-8 w-8 mb-2" />
                             <span className="font-medium">Add New Surcharge</span>
                         </Card>

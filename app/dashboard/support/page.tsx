@@ -179,7 +179,7 @@ export default function SupportPage() {
                 </TabsContent>
 
                 <TabsContent value="disputes" className="animate-in fade-in-50">
-                    <DisputeEnginePanel />
+                    <DisputeEnginePanel tickets={tickets} />
                 </TabsContent>
             </Tabs>
         </div>

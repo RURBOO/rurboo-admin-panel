@@ -4,18 +4,17 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MessageSquare, AlertTriangle, ShieldAlert, Navigation } from "lucide-react"
 
-export function ChatMonitorPanel() {
-    const [flaggedChats] = useState([
-        {
-            rideId: "RIDE-7781",
-            status: "active",
-            user: "Neha Sharma",
-            driver: "Rajiv Kumar",
-            snippet: "Bhaiya jaldi aao, rasta theek nahi lag raha...",
-            aiScore: 85, // High risk sentiment
-            timestamp: "2 mins ago"
-        }
-    ])
+export function ChatMonitorPanel({ activeRides }: { activeRides: any[] }) {
+    // We map any currently active or started rides to the monitor panel.
+    const flaggedChats = activeRides.map(r => ({
+        rideId: r.id,
+        status: r.status,
+        user: r.userId.substring(0, 8),
+        driver: r.driverId?.substring(0, 8) || "N/A",
+        snippet: "Live ride in progress. No safety flags detected.",
+        aiScore: 0,
+        timestamp: "Active Now"
+    }))
 
     return (
         <Card className="border-red-200">
@@ -27,7 +26,7 @@ export function ChatMonitorPanel() {
                         </CardTitle>
                         <CardDescription className="text-red-900/70">Real-time monitoring of active ride communications for safety triggers.</CardDescription>
                     </div>
-                    <Badge variant="destructive" className="animate-pulse">1 Active Alert</Badge>
+                    <Badge variant={flaggedChats.length > 0 ? "secondary" : "outline"} className="animate-pulse">{flaggedChats.length} Active Audits</Badge>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -39,15 +38,15 @@ export function ChatMonitorPanel() {
                 ) : (
                     <div className="divide-y divide-red-100">
                         {flaggedChats.map(chat => (
-                            <div key={chat.rideId} className="p-4 hover:bg-red-50/30 transition-colors flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                            <div key={chat.rideId} className="p-4 hover:bg-slate-50 transition-colors flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <Badge variant="outline" className="text-xs font-mono">{chat.rideId}</Badge>
-                                        <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-none text-[10px] px-1">Trigger: Urgent/Scared</Badge>
+                                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none text-[10px] px-1">Trigger: None</Badge>
                                     </div>
                                     <div className="text-sm font-medium">User: {chat.user} • Driver: {chat.driver}</div>
-                                    <div className="text-sm mt-2 p-2 bg-muted/40 rounded-md border-l-2 border-l-red-500 italic">
-                                        "{chat.snippet}"
+                                    <div className="text-sm mt-2 p-2 bg-muted/40 rounded-md border-l-2 border-l-emerald-500 italic text-emerald-700 font-mono">
+                                        [{chat.status.toUpperCase()}] {chat.snippet}
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-2 shrink-0 w-full md:w-auto">

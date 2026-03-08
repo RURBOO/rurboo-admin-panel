@@ -1,19 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BatteryCharging, Truck, AlertCircle, Wrench, CheckCircle2 } from "lucide-react"
+import { collection, onSnapshot, query, setDoc, doc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 export default function InventoryPage() {
-    const [vehicles] = useState([
-        { id: "EV-0012", model: "Tata Nexon EV", driver: "Sunil Verma", status: "active", battery: 84, nextService: "2026-04-15", condition: "Good" },
-        { id: "EV-0044", model: "Mahindra XUV400", driver: "Unassigned", status: "maintenance", battery: 12, nextService: "2026-03-10", condition: "Tire Replacement" },
-        { id: "EV-0089", model: "Tata Tigor EV", driver: "Rajesh Kumar", status: "active", battery: 28, nextService: "2026-05-20", condition: "Good" },
-        { id: "EV-0091", model: "BYD Atto 3", driver: "Vikram Singh", status: "flagged", battery: 15, nextService: "2026-03-15", condition: "Battery Warning" },
-    ])
+    const [vehicles, setVehicles] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const q = query(collection(db, "inventory_vehicles"))
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const rawDocs: any[] = []
+            snapshot.forEach((doc) => {
+                rawDocs.push({ id: doc.id, ...doc.data() })
+            })
+            setVehicles(rawDocs)
+            setLoading(false)
+        })
+        return () => unsubscribe()
+    }, [])
 
     return (
         <div className="p-8 space-y-8 h-full flex flex-col animate-in fade-in duration-500">
@@ -37,7 +48,7 @@ export default function InventoryPage() {
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold">142</div>
+                        <div className="text-2xl font-bold">{vehicles.filter(v => v.status === 'active').length}</div>
                         <p className="text-xs text-muted-foreground">Vehicles currently on road</p>
                     </CardContent>
                 </Card>
@@ -47,7 +58,7 @@ export default function InventoryPage() {
                         <Wrench className="w-4 h-4 text-orange-500" />
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold">12</div>
+                        <div className="text-2xl font-bold">{vehicles.filter(v => v.status === 'maintenance').length}</div>
                         <p className="text-xs text-muted-foreground">In service centers</p>
                     </CardContent>
                 </Card>
@@ -57,7 +68,7 @@ export default function InventoryPage() {
                         <BatteryCharging className="w-4 h-4 text-red-500" />
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-red-600">8</div>
+                        <div className="text-2xl font-bold text-red-600">{vehicles.filter(v => v.battery < 20).length}</div>
                         <p className="text-xs text-muted-foreground">Requires immediate charging</p>
                     </CardContent>
                 </Card>
@@ -67,7 +78,7 @@ export default function InventoryPage() {
                         <AlertCircle className="w-4 h-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold">5</div>
+                        <div className="text-2xl font-bold">{vehicles.filter(v => !v.driver || v.driver === 'Unassigned').length}</div>
                         <p className="text-xs text-muted-foreground">Ready for deployment</p>
                     </CardContent>
                 </Card>
@@ -93,17 +104,25 @@ export default function InventoryPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {vehicles.map((v) => (
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">Loading fleet data...</TableCell>
+                                    </TableRow>
+                                ) : vehicles.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">No vehicles found in inventory.</TableCell>
+                                    </TableRow>
+                                ) : vehicles.map((v) => (
                                     <TableRow key={v.id}>
                                         <TableCell className="font-mono font-medium">{v.id}</TableCell>
                                         <TableCell>{v.model}</TableCell>
-                                        <TableCell className="text-muted-foreground">{v.driver}</TableCell>
+                                        <TableCell className="text-muted-foreground">{v.driver || 'Unassigned'}</TableCell>
                                         <TableCell>
                                             <Badge variant={
                                                 v.status === 'active' ? 'default' :
                                                     v.status === 'flagged' ? 'destructive' : 'secondary'
                                             } className={v.status === 'active' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}>
-                                                {v.status.toUpperCase()}
+                                                {(v.status || "Unknown").toUpperCase()}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
@@ -111,15 +130,15 @@ export default function InventoryPage() {
                                                 <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
                                                     <div
                                                         className={`h-full ${v.battery < 20 ? 'bg-red-500' : v.battery < 50 ? 'bg-orange-500' : 'bg-emerald-500'}`}
-                                                        style={{ width: `${v.battery}%` }}
+                                                        style={{ width: `${v.battery || 0}%` }}
                                                     />
                                                 </div>
-                                                <span className="text-xs font-medium">{v.battery}%</span>
+                                                <span className="text-xs font-medium">{v.battery || 0}%</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {v.nextService}
-                                            <div className="text-xs text-muted-foreground">{v.condition}</div>
+                                            {v.nextService || "N/A"}
+                                            <div className="text-xs text-muted-foreground">{v.condition || ""}</div>
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="sm">Manage</Button>

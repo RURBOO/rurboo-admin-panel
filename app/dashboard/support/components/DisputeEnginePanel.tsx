@@ -4,29 +4,40 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { MessageSquare, Map, IndianRupee, Gavel, CheckCircle2 } from "lucide-react"
+import { MessageSquare, Map, IndianRupee, Gavel, CheckCircle2, Loader2 } from "lucide-react"
+import { SupportTicket } from "@/features/support/hooks/useSupport"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
 
-export function DisputeEnginePanel() {
-    const [disputes] = useState([
-        {
-            id: "RUR-9921",
-            driverName: "Sanjay Kumar",
-            userName: "Amit Sharma",
-            issue: "Driver took a longer route causing 30 min delay.",
-            status: "requires_action",
-            fare: 450,
-            estimatedFare: 320
-        },
-        {
-            id: "RUR-8843",
-            driverName: "Rahul Singh",
-            userName: "Priya Patel",
-            issue: "AC was not working despite selecting Prime.",
-            status: "investigating",
-            fare: 600,
-            estimatedFare: 600
+export function DisputeEnginePanel({ tickets }: { tickets: SupportTicket[] }) {
+    const [processingId, setProcessingId] = useState<string | null>(null)
+
+    // Filter tickets that might be dispute related, or just map the latest open ones 
+    // to function as the dispute queue.
+    const disputes = tickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').map(t => ({
+        id: t.id,
+        driverName: t.userType === 'driver' ? t.name : "Unknown Driver",
+        userName: t.userType === 'user' ? t.name : "Unknown User",
+        issue: t.subject + " - " + t.message,
+        status: t.status,
+        fare: 0, // Would be fetched from actual ride history reference
+        estimatedFare: 0
+    }))
+
+    const handleIssueRefund = async (id: string) => {
+        setProcessingId(id)
+        try {
+            await updateDoc(doc(db, "support_tickets", id), {
+                status: 'resolved'
+            })
+            toast.success("Refund processed and ticket resolved!")
+        } catch (error) {
+            toast.error("Failed to issue refund.")
+        } finally {
+            setProcessingId(null)
         }
-    ])
+    }
 
     return (
         <div className="space-y-6">
@@ -99,8 +110,14 @@ export function DisputeEnginePanel() {
                                 <div className="flex gap-2 items-center">
                                     <Label className="whitespace-nowrap text-xs">Partial Refund:</Label>
                                     <Input type="number" placeholder="Amt" className="h-8" />
-                                    <Button size="sm" className="h-8 bg-black shrink-0">
-                                        <IndianRupee className="w-3 h-3 mr-1" /> Issue
+                                    <Button
+                                        size="sm"
+                                        className="h-8 bg-black shrink-0"
+                                        disabled={processingId === dispute.id}
+                                        onClick={() => handleIssueRefund(dispute.id)}
+                                    >
+                                        {processingId === dispute.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <IndianRupee className="w-3 h-3 mr-1" />}
+                                        Issue
                                     </Button>
                                 </div>
                             </div>

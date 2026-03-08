@@ -1,13 +1,52 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Map, Save, Navigation, ShieldCheck } from "lucide-react"
+import { Map, Save, Navigation, ShieldCheck, Loader2 } from "lucide-react"
+import { doc, getDoc, setDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
 
 export function GeofencingPanel() {
     const [strictMode, setStrictMode] = useState(true)
     const [outstationEnabled, setOutstationEnabled] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const docSnap = await getDoc(doc(db, "configs", "geofencing"))
+                if (docSnap.exists()) {
+                    const data = docSnap.data()
+                    setStrictMode(data.strictMode ?? true)
+                    setOutstationEnabled(data.outstationEnabled ?? false)
+                }
+            } catch (error) {
+                console.error("Error fetching geofence configs", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchConfig()
+    }, [])
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await setDoc(doc(db, "configs", "geofencing"), {
+                strictMode,
+                outstationEnabled
+            }, { merge: true })
+            toast.success("Geofence rules updated across fleet system.")
+        } catch (error) {
+            console.error(error)
+            toast.error("Failed to commit network configurations.")
+        } finally {
+            setSaving(false)
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -16,8 +55,8 @@ export function GeofencingPanel() {
                     <h3 className="text-xl font-medium">Geofencing & City Limits</h3>
                     <p className="text-sm text-muted-foreground">Restrict driver ride acceptances to operating zones and manage outstation policies.</p>
                 </div>
-                <Button>
-                    <Save className="h-4 w-4 mr-2" />
+                <Button onClick={handleSave} disabled={loading || saving}>
+                    {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                     Save Configuration
                 </Button>
             </div>

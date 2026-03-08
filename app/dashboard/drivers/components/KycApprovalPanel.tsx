@@ -2,15 +2,36 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, XCircle, Clock, FileText, Download } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, FileText, Download, Loader2 } from "lucide-react"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
+import { Driver } from "@/lib/types"
 
-export function KycApprovalPanel() {
-    // Mock data for UI demonstration
-    const [pendingDocs, setPendingDocs] = useState([
-        { id: "KYC-001", driverName: "Ramesh Singh", docType: "Aadhar Card", submittedAt: "2 hours ago", status: "pending" },
-        { id: "KYC-002", driverName: "Ali Khan", docType: "Driving License", submittedAt: "3 hours ago", status: "pending" },
-        { id: "KYC-003", driverName: "Sunil Verma", docType: "Vehicle RC", submittedAt: "5 hours ago", status: "pending" },
-    ])
+export function KycApprovalPanel({ drivers }: { drivers: Driver[] }) {
+    const [processingId, setProcessingId] = useState<string | null>(null)
+
+    const pendingDocs = drivers.flatMap(driver => {
+        const docs = [];
+        if (driver.profileStatus === 'pending') docs.push({ id: `${driver.id}-profile`, driverId: driver.id, driverName: driver.name || driver.email || 'Unknown', docType: "Profile Photo", submittedAt: "Recent", image: driver.profileImage, field: 'profileStatus' });
+        if (driver.licenseStatus === 'pending') docs.push({ id: `${driver.id}-license`, driverId: driver.id, driverName: driver.name || driver.email || 'Unknown', docType: "Driving License", submittedAt: "Recent", image: driver.licenseImage, field: 'licenseStatus' });
+        if (driver.rcStatus === 'pending') docs.push({ id: `${driver.id}-rc`, driverId: driver.id, driverName: driver.name || driver.email || 'Unknown', docType: "Vehicle RC", submittedAt: "Recent", image: driver.rcImage, field: 'rcStatus' });
+        return docs;
+    })
+
+    const handleAction = async (docRef: any, act: 'approved' | 'rejected') => {
+        setProcessingId(docRef.id)
+        try {
+            await updateDoc(doc(db, "drivers", docRef.driverId), {
+                [docRef.field]: act
+            })
+            toast.success(`Document marked as ${act}.`)
+        } catch (e) {
+            toast.error("Failed to update status")
+        } finally {
+            setProcessingId(null)
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -31,8 +52,8 @@ export function KycApprovalPanel() {
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">12</div>
-                        <p className="text-xs text-muted-foreground">Drivers successfully onboarded</p>
+                        <div className="text-2xl font-bold">{drivers.filter(d => d.status === 'verified').length}</div>
+                        <p className="text-xs text-muted-foreground">Total verified drivers on platform</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -41,8 +62,8 @@ export function KycApprovalPanel() {
                         <XCircle className="w-4 h-4 text-red-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">3</div>
-                        <p className="text-xs text-muted-foreground">Missing or blurry documents</p>
+                        <div className="text-2xl font-bold">{drivers.filter(d => Boolean(d.profileStatus === 'rejected' || d.rcStatus === 'rejected' || d.licenseStatus === 'rejected')).length}</div>
+                        <p className="text-xs text-muted-foreground">Drivers with rejected documents</p>
                     </CardContent>
                 </Card>
             </div>
@@ -74,21 +95,25 @@ export function KycApprovalPanel() {
                                     </div>
 
                                     <div className="flex w-full sm:w-auto items-center gap-2">
-                                        <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
+                                        <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => doc.image && window.open(doc.image, '_blank')}>
                                             <Download className="w-4 h-4 mr-2" /> View Image
                                         </Button>
-                                        <Button variant="default" size="sm" className="bg-emerald-600 hover:bg-emerald-700 flex-1 sm:flex-none" onClick={() => {
-                                            const newDocs = [...pendingDocs];
-                                            newDocs.splice(idx, 1);
-                                            setPendingDocs(newDocs);
-                                        }}>
-                                            Approve
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            className="bg-emerald-600 hover:bg-emerald-700 flex-1 sm:flex-none"
+                                            disabled={processingId === doc.id}
+                                            onClick={() => handleAction(doc, 'approved')}
+                                        >
+                                            {processingId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Approve"}
                                         </Button>
-                                        <Button variant="destructive" size="sm" className="flex-1 sm:flex-none" onClick={() => {
-                                            const newDocs = [...pendingDocs];
-                                            newDocs.splice(idx, 1);
-                                            setPendingDocs(newDocs);
-                                        }}>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            className="flex-1 sm:flex-none"
+                                            disabled={processingId === doc.id}
+                                            onClick={() => handleAction(doc, 'rejected')}
+                                        >
                                             Reject
                                         </Button>
                                     </div>

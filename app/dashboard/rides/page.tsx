@@ -118,7 +118,7 @@ export default function RidesPage() {
                 </TabsContent>
 
                 <TabsContent value="radar" className="animate-in fade-in-50">
-                    <ChatMonitorPanel />
+                    <ChatMonitorPanel activeRides={rides.filter(r => r.status === 'started' || r.status === 'accepted')} />
                 </TabsContent>
             </Tabs>
         </div>

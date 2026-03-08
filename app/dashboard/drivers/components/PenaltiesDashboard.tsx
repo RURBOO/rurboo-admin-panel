@@ -2,13 +2,36 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, Clock, ShieldAlert, Gavel, UserX } from "lucide-react"
+import { AlertTriangle, Clock, ShieldAlert, Gavel, UserX, Loader2 } from "lucide-react"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
+import { Driver } from "@/lib/types"
 
-export function PenaltiesDashboard() {
-    const [penalties, setPenalties] = useState([
-        { id: "P-101", driverName: "Karan Johar", reason: "3 Consecutive Cancellations", penalty: "24-Hour Ban", expiresAt: "Tomorrow, 2:00 PM" },
-        { id: "P-102", driverName: "Vikram Seth", reason: "Multiple User Reports", penalty: "Account Under Review", expiresAt: "Pending Manual Review" }
-    ])
+export function PenaltiesDashboard({ drivers }: { drivers: Driver[] }) {
+    const [processingId, setProcessingId] = useState<string | null>(null)
+
+    const penalties = drivers.filter(d => d.status === 'suspended').map(driver => ({
+        id: driver.id,
+        driverName: driver.name || driver.email || 'Unknown',
+        reason: "System Safety Lock / Manual Suspension",
+        penalty: "Account Suspended",
+        expiresAt: "Pending Manual Review"
+    }))
+
+    const handleOverrule = async (id: string) => {
+        setProcessingId(id)
+        try {
+            await updateDoc(doc(db, "drivers", id), {
+                status: 'verified' // Assume verified if they were approved before
+            })
+            toast.success("Ban overruled successfully. Driver activated.")
+        } catch (e) {
+            toast.error("Failed to lift driver suspension.")
+        } finally {
+            setProcessingId(null)
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -67,12 +90,14 @@ export function PenaltiesDashboard() {
                                     </div>
                                 </div>
                                 <div className="p-4 md:w-1/4 flex gap-2 items-center justify-end border-t md:border-t-0 bg-muted/10">
-                                    <Button variant="outline" size="sm" onClick={() => {
-                                        const newList = [...penalties];
-                                        newList.splice(idx, 1);
-                                        setPenalties(newList);
-                                    }}>
-                                        <ShieldAlert className="w-4 h-4 mr-2 text-orange-500" /> Overrule Ban
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={processingId === penalty.id}
+                                        onClick={() => handleOverrule(penalty.id)}
+                                    >
+                                        {processingId === penalty.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldAlert className="w-4 h-4 mr-2 text-orange-500" />}
+                                        Overrule Ban
                                     </Button>
                                 </div>
                             </div>

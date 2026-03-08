@@ -452,11 +452,11 @@ export default function DriversPage() {
                 </TabsContent>
 
                 <TabsContent value="kyc" className="animate-in fade-in-50">
-                    <KycApprovalPanel />
+                    <KycApprovalPanel drivers={drivers} />
                 </TabsContent>
 
                 <TabsContent value="penalties" className="animate-in fade-in-50">
-                    <PenaltiesDashboard />
+                    <PenaltiesDashboard drivers={drivers} />
                 </TabsContent>
             </Tabs>
 
