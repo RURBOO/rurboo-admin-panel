@@ -6,8 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Save } from "lucide-react"
-// import { toast } from "sonner" // Removed, using alert for now
+
+import { SurgePricingPanel } from "./components/SurgePricingPanel"
+import { GeofencingPanel } from "./components/GeofencingPanel"
+import { TollsTaxesPanel } from "./components/TollsTaxesPanel"
 
 const vehicleTypes = [
     { key: 'bike', label: 'Bike Taxi' },
@@ -85,77 +89,100 @@ export default function PricingPage() {
 
     return (
         <div className="p-8 space-y-8">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Pricing & Rates</h2>
-                    <p className="text-muted-foreground">
-                        Manage base fares and per-km rates for all vehicle types.
-                    </p>
-                </div>
-                <Button onClick={saveChanges} disabled={saving}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save Changes
-                </Button>
-            </div>
+            <Tabs defaultValue="base-rates" className="w-full">
+                <TabsList className="mb-8 p-1 bg-secondary/50 border rounded-lg h-auto inline-flex flex-wrap gap-2">
+                    <TabsTrigger value="base-rates" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Base Fares & Commission</TabsTrigger>
+                    <TabsTrigger value="surge" className="py-2 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Dynamic Surge Pricing</TabsTrigger>
+                    <TabsTrigger value="geofence" className="py-2 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Geofencing & City Limits</TabsTrigger>
+                    <TabsTrigger value="tolls" className="py-2 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Tolls & Taxes</TabsTrigger>
+                </TabsList>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Platform Commission</CardTitle>
-                    <CardDescription>Percentage taken by Rurboo from each ride.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4 max-w-sm">
-                        <Label>Commission (%)</Label>
-                        <Input
-                            type="number"
-                            value={localRates?.commission_percent || 0}
-                            onChange={(e) => handleCommissionChange(e.target.value)}
-                        />
+                <TabsContent value="base-rates" className="space-y-8 mt-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-3xl font-bold tracking-tight">Pricing & Fares</h2>
+                            <p className="text-muted-foreground">
+                                Manage base fares, per-km rates, and commission structures.
+                            </p>
+                        </div>
+                        <Button onClick={saveChanges} disabled={saving}>
+                            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Save Fares
+                        </Button>
                     </div>
-                </CardContent>
-            </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {vehicleTypes.map((vehicle) => {
-                    const config = (localRates?.[vehicle.key] as RateConfig) || { base_fare: 0, per_km: 0, night_charge: 0 };
-                    return (
-                        <Card key={vehicle.key}>
-                            <CardHeader>
-                                <CardTitle className="text-lg">{vehicle.label}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid w-full items-center gap-1.5">
-                                    <Label htmlFor={`${vehicle.key}-base`}>Base Fare (₹)</Label>
-                                    <Input
-                                        id={`${vehicle.key}-base`}
-                                        type="number"
-                                        value={config.base_fare}
-                                        onChange={(e) => handleRateChange(vehicle.key, 'base_fare', e.target.value)}
-                                    />
-                                </div>
-                                <div className="grid w-full items-center gap-1.5">
-                                    <Label htmlFor={`${vehicle.key}-km`}>Per KM Rate (₹)</Label>
-                                    <Input
-                                        id={`${vehicle.key}-km`}
-                                        type="number"
-                                        value={config.per_km}
-                                        onChange={(e) => handleRateChange(vehicle.key, 'per_km', e.target.value)}
-                                    />
-                                </div>
-                                <div className="grid w-full items-center gap-1.5">
-                                    <Label htmlFor={`${vehicle.key}-night`}>Night Charge (₹)</Label>
-                                    <Input
-                                        id={`${vehicle.key}-night`}
-                                        type="number"
-                                        value={config.night_charge}
-                                        onChange={(e) => handleRateChange(vehicle.key, 'night_charge', e.target.value)}
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )
-                })}
-            </div>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Platform Commission</CardTitle>
+                            <CardDescription>Percentage taken by Rurboo from each ride.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-4 max-w-sm">
+                                <Label>Commission (%)</Label>
+                                <Input
+                                    type="number"
+                                    value={localRates?.commission_percent || 0}
+                                    onChange={(e) => handleCommissionChange(e.target.value)}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {vehicleTypes.map((vehicle) => {
+                            const config = (localRates?.[vehicle.key] as RateConfig) || { base_fare: 0, per_km: 0, night_charge: 0 };
+                            return (
+                                <Card key={vehicle.key}>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">{vehicle.label}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid w-full items-center gap-1.5">
+                                            <Label htmlFor={`${vehicle.key}-base`}>Base Fare (₹)</Label>
+                                            <Input
+                                                id={`${vehicle.key}-base`}
+                                                type="number"
+                                                value={config.base_fare}
+                                                onChange={(e) => handleRateChange(vehicle.key, 'base_fare', e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="grid w-full items-center gap-1.5">
+                                            <Label htmlFor={`${vehicle.key}-km`}>Per KM Rate (₹)</Label>
+                                            <Input
+                                                id={`${vehicle.key}-km`}
+                                                type="number"
+                                                value={config.per_km}
+                                                onChange={(e) => handleRateChange(vehicle.key, 'per_km', e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="grid w-full items-center gap-1.5">
+                                            <Label htmlFor={`${vehicle.key}-night`}>Night Charge (₹)</Label>
+                                            <Input
+                                                id={`${vehicle.key}-night`}
+                                                type="number"
+                                                value={config.night_charge}
+                                                onChange={(e) => handleRateChange(vehicle.key, 'night_charge', e.target.value)}
+                                            />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })}
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="surge" className="mt-4 animate-in fade-in-50">
+                    <SurgePricingPanel />
+                </TabsContent>
+
+                <TabsContent value="geofence" className="mt-4 animate-in fade-in-50">
+                    <GeofencingPanel />
+                </TabsContent>
+
+                <TabsContent value="tolls" className="mt-4 animate-in fade-in-50">
+                    <TollsTaxesPanel />
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

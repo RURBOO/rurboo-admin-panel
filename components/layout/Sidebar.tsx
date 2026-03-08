@@ -17,7 +17,8 @@ import {
     MessageSquare,
     Bell,
     LogOut,
-    UserCircle
+    UserCircle,
+    Truck
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -94,6 +95,12 @@ const routes = [
         icon: CreditCard, // Reusing CreditCard or finding another like Banknote if available, but consistent with lucide
         href: "/dashboard/pricing",
         color: "text-yellow-600",
+    },
+    {
+        label: "Inventory",
+        icon: Truck,
+        href: "/dashboard/inventory",
+        color: "text-amber-500",
     },
     {
         label: "Settings",

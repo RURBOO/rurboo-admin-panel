@@ -40,6 +40,9 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { KycApprovalPanel } from "./components/KycApprovalPanel"
+import { PenaltiesDashboard } from "./components/PenaltiesDashboard"
 import { useDrivers } from "@/features/drivers/hooks/useDrivers"
 import { exportToExcel } from "@/lib/exportUtils"
 import { toast } from "sonner"
@@ -286,158 +289,176 @@ export default function DriversPage() {
                 </div>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Driver</TableHead>
-                            <TableHead>Phone</TableHead>
-                            <TableHead>Vehicle</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Rating</TableHead>
-                            <TableHead>Total Rides</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
-                                    Loading drivers...
-                                </TableCell>
-                            </TableRow>
-                        ) : filteredDrivers.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
-                                    No drivers found for the selected filter.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            filteredDrivers.map((driver) => (
-                                <TableRow
-                                    key={driver.id}
-                                    className="cursor-pointer hover:bg-muted/50"
-                                    onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}
-                                >
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={driver.photoURL} />
-                                                <AvatarFallback>{driver.name?.charAt(0) || "D"}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <div className="font-medium">{driver.name || "N/A"}</div>
-                                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                                                    {driver.verified && (
-                                                        <span className="flex items-center gap-1">
-                                                            <ShieldCheck className="h-3 w-3 text-blue-600" />
-                                                            Verified
-                                                        </span>
-                                                    )}
-                                                    <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${driver.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}`}>
-                                                        {driver.isOnline ? "Online" : "Offline"}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{driver.phone || driver.phoneNumber || "N/A"}</TableCell>
-                                    <TableCell>
-                                        <div>
-                                            <div className="font-medium">{driver.vehicleType || "N/A"}</div>
-                                            <div className="text-sm text-muted-foreground">{driver.vehicleNumber || ""}</div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{getStatusBadge(driver.status, driver.verified || false)}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            ⭐ {driver.rating?.toFixed(1) || "N/A"}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{driver.totalRides || 0}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div onClick={(e) => e.stopPropagation()}>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}`); }}>
-                                                        View Profile
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}?tab=documents`); }}>
-                                                        View Documents
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rides?driverId=${driver.id}`); }}>
-                                                        View Ride History
-                                                    </DropdownMenuItem>
-                                                    {driver.rcStatus !== 'approved' || driver.vehicleStatus !== 'approved' ? (
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'verify_vehicle'); }}
-                                                            className="text-blue-600"
-                                                        >
-                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Verify Vehicle
-                                                        </DropdownMenuItem>
-                                                    ) : null}
-                                                    <DropdownMenuSeparator />
-                                                    {driver.status === 'pending' && (
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (!canActivateDriver(driver)) {
-                                                                    e.preventDefault();
-                                                                    toast.error("Cannot approve: All documents must be uploaded and approved first.");
-                                                                    return;
-                                                                }
-                                                                openActionDialog(driver, 'approve');
-                                                            }}
-                                                            className="text-green-600"
-                                                        >
-                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Approve Driver
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                    {driver.status === 'suspended' && (
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (!canActivateDriver(driver)) {
-                                                                    e.preventDefault();
-                                                                    toast.error("Cannot activate: All documents must be uploaded and approved first.");
-                                                                    return;
-                                                                }
-                                                                openActionDialog(driver, 'activate');
-                                                            }}
-                                                            className="text-green-600"
-                                                        >
-                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Activate Driver
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                    {driver.status === 'verified' && (
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'suspend'); }}
-                                                            className="text-destructive"
-                                                        >
-                                                            <ShieldAlert className="mr-2 h-4 w-4" />
-                                                            Suspend Driver
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </TableCell>
+            <Tabs defaultValue="all" className="w-full">
+                <TabsList className="mb-6 p-1 bg-secondary/50 border rounded-lg h-auto inline-flex flex-wrap gap-2">
+                    <TabsTrigger value="all" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Driver Roster</TabsTrigger>
+                    <TabsTrigger value="kyc" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">KYC Approvals</TabsTrigger>
+                    <TabsTrigger value="penalties" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Penalties & Bans</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="all" className="space-y-4">
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Driver</TableHead>
+                                    <TableHead>Phone</TableHead>
+                                    <TableHead>Vehicle</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Rating</TableHead>
+                                    <TableHead>Total Rides</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">
+                                            Loading drivers...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredDrivers.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">
+                                            No drivers found for the selected filter.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredDrivers.map((driver) => (
+                                        <TableRow
+                                            key={driver.id}
+                                            className="cursor-pointer hover:bg-muted/50"
+                                            onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}
+                                        >
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar>
+                                                        <AvatarImage src={driver.photoURL} />
+                                                        <AvatarFallback>{driver.name?.charAt(0) || "D"}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <div className="font-medium">{driver.name || "N/A"}</div>
+                                                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                                            {driver.verified && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <ShieldCheck className="h-3 w-3 text-blue-600" />
+                                                                    Verified
+                                                                </span>
+                                                            )}
+                                                            <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${driver.isOnline ? "border-green-500 text-green-600" : "text-muted-foreground"}`}>
+                                                                {driver.isOnline ? "Online" : "Offline"}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{driver.phone || driver.phoneNumber || "N/A"}</TableCell>
+                                            <TableCell>
+                                                <div>
+                                                    <div className="font-medium">{driver.vehicleType || "N/A"}</div>
+                                                    <div className="text-sm text-muted-foreground">{driver.vehicleNumber || ""}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{getStatusBadge(driver.status, driver.verified || false)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    ⭐ {driver.rating?.toFixed(1) || "N/A"}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{driver.totalRides || 0}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div onClick={(e) => e.stopPropagation()}>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                                                <span className="sr-only">Open menu</span>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}`); }}>
+                                                                View Profile
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/drivers/${driver.id}?tab=documents`); }}>
+                                                                View Documents
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rides?driverId=${driver.id}`); }}>
+                                                                View Ride History
+                                                            </DropdownMenuItem>
+                                                            {driver.rcStatus !== 'approved' || driver.vehicleStatus !== 'approved' ? (
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'verify_vehicle'); }}
+                                                                    className="text-blue-600"
+                                                                >
+                                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                                    Verify Vehicle
+                                                                </DropdownMenuItem>
+                                                            ) : null}
+                                                            <DropdownMenuSeparator />
+                                                            {driver.status === 'pending' && (
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (!canActivateDriver(driver)) {
+                                                                            e.preventDefault();
+                                                                            toast.error("Cannot approve: All documents must be uploaded and approved first.");
+                                                                            return;
+                                                                        }
+                                                                        openActionDialog(driver, 'approve');
+                                                                    }}
+                                                                    className="text-green-600"
+                                                                >
+                                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                                    Approve Driver
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {driver.status === 'suspended' && (
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (!canActivateDriver(driver)) {
+                                                                            e.preventDefault();
+                                                                            toast.error("Cannot activate: All documents must be uploaded and approved first.");
+                                                                            return;
+                                                                        }
+                                                                        openActionDialog(driver, 'activate');
+                                                                    }}
+                                                                    className="text-green-600"
+                                                                >
+                                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                                    Activate Driver
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {driver.status === 'verified' && (
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => { e.stopPropagation(); openActionDialog(driver, 'suspend'); }}
+                                                                    className="text-destructive"
+                                                                >
+                                                                    <ShieldAlert className="mr-2 h-4 w-4" />
+                                                                    Suspend Driver
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="kyc" className="animate-in fade-in-50">
+                    <KycApprovalPanel />
+                </TabsContent>
+
+                <TabsContent value="penalties" className="animate-in fade-in-50">
+                    <PenaltiesDashboard />
+                </TabsContent>
+            </Tabs>
 
             {/* Confirmation Dialog */}
             <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -14,6 +14,8 @@ import { MapPin, ArrowRight, Download } from "lucide-react"
 import { useRides } from "@/features/rides/hooks/useRides"
 import { useState } from "react"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ChatMonitorPanel } from "./components/ChatMonitorPanel"
 import { exportToExcel } from "@/lib/exportUtils"
 import { toast } from "sonner"
 
@@ -49,63 +51,76 @@ export default function RidesPage() {
                 </div>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Ride ID</TableHead>
-                            <TableHead>Driver ID</TableHead>
-                            <TableHead>User ID</TableHead>
-                            <TableHead>Route</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Fare</TableHead>
-                            <TableHead className="text-right">Date</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
-                                    Loading rides...
-                                </TableCell>
-                            </TableRow>
-                        ) : rides.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
-                                    No rides found.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            rides.map((ride) => (
-                                <TableRow key={ride.id}>
-                                    <TableCell className="font-medium text-xs">{ride.id.substring(0, 8)}</TableCell>
-                                    <TableCell className="text-xs">{ride.driverId ? ride.driverId.substring(0, 8) : 'Pending'}</TableCell>
-                                    <TableCell className="text-xs">{ride.userId.substring(0, 8)}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center text-sm">
-                                            <span className="truncate max-w-[150px]">{ride.pickupLocation?.address || 'Unknown'}</span>
-                                            <ArrowRight className="h-4 w-4 mx-2 text-muted-foreground" />
-                                            <span className="truncate max-w-[150px]">{ride.dropLocation?.address || 'Unknown'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={
-                                            ride.status === 'completed' ? 'default' :
-                                                ride.status === 'started' ? 'secondary' :
-                                                    ride.status === 'cancelled' ? 'destructive' : 'outline'
-                                        }>
-                                            {ride.status}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">{ride.fare ? `₹ ${ride.fare}` : '-'}</TableCell>
-                                    <TableCell className="text-right text-muted-foreground text-xs">
-                                        {(ride.timestamp as unknown as string) || 'N/A'}
-                                    </TableCell>
+            <Tabs defaultValue="log" className="w-full">
+                <TabsList className="mb-6 p-1 bg-secondary/50 border rounded-lg h-auto inline-flex flex-wrap gap-2">
+                    <TabsTrigger value="log" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Master Ride Log</TabsTrigger>
+                    <TabsTrigger value="radar" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-red-600 data-[state=active]:bg-red-600 data-[state=active]:text-white">Safety Radar</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="log" className="space-y-4">
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Ride ID</TableHead>
+                                    <TableHead>Driver ID</TableHead>
+                                    <TableHead>User ID</TableHead>
+                                    <TableHead>Route</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Fare</TableHead>
+                                    <TableHead className="text-right">Date</TableHead>
                                 </TableRow>
-                            )))}
-                    </TableBody>
-                </Table>
-            </div>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">
+                                            Loading rides...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : rides.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-24">
+                                            No rides found.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    rides.map((ride) => (
+                                        <TableRow key={ride.id}>
+                                            <TableCell className="font-medium text-xs">{ride.id.substring(0, 8)}</TableCell>
+                                            <TableCell className="text-xs">{ride.driverId ? ride.driverId.substring(0, 8) : 'Pending'}</TableCell>
+                                            <TableCell className="text-xs">{ride.userId.substring(0, 8)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center text-sm">
+                                                    <span className="truncate max-w-[150px]">{ride.pickupLocation?.address || 'Unknown'}</span>
+                                                    <ArrowRight className="h-4 w-4 mx-2 text-muted-foreground" />
+                                                    <span className="truncate max-w-[150px]">{ride.dropLocation?.address || 'Unknown'}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={
+                                                    ride.status === 'completed' ? 'default' :
+                                                        ride.status === 'started' ? 'secondary' :
+                                                            ride.status === 'cancelled' ? 'destructive' : 'outline'
+                                                }>
+                                                    {ride.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">{ride.fare ? `₹ ${ride.fare}` : '-'}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground text-xs">
+                                                {(ride.timestamp as unknown as string) || 'N/A'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="radar" className="animate-in fade-in-50">
+                    <ChatMonitorPanel />
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge"
 import { Settings as SettingsIcon, User, Bell, Shield, Key, RefreshCw, Clock, Activity } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { OperatorManagement } from "./components/OperatorManagement"
+import { AppVersionPanel } from "./components/AppVersionPanel"
+import { DriverTiersPanel } from "./components/DriverTiersPanel"
+import { CronJobsPanel } from "./components/CronJobsPanel"
 import { useAuth } from "@/features/auth/AuthContext"
 import { doc, updateDoc, getDoc, collection, query, orderBy, limit, getDocs, Timestamp } from "firebase/firestore"
 import { sendPasswordResetEmail, updateProfile } from "firebase/auth"
@@ -161,6 +164,9 @@ export default function SettingsPage() {
                     <TabsTrigger value="notifications">Notifications</TabsTrigger>
                     <TabsTrigger value="security">Security</TabsTrigger>
                     <TabsTrigger value="audit" onClick={fetchAuditLogs}>Audit Log</TabsTrigger>
+                    <TabsTrigger value="version">App Versions</TabsTrigger>
+                    <TabsTrigger value="tiers">Driver Tiers</TabsTrigger>
+                    <TabsTrigger value="cron">Automated Tasks</TabsTrigger>
                 </TabsList>
 
                 {/* PROFILE TAB */}
@@ -373,6 +379,21 @@ export default function SettingsPage() {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* APP VERSION TAB */}
+                <TabsContent value="version" className="space-y-4">
+                    <AppVersionPanel />
+                </TabsContent>
+
+                {/* DRIVER TIERS TAB */}
+                <TabsContent value="tiers" className="space-y-4">
+                    <DriverTiersPanel />
+                </TabsContent>
+
+                {/* CRON JOBS TAB */}
+                <TabsContent value="cron" className="space-y-4">
+                    <CronJobsPanel />
                 </TabsContent>
             </Tabs>
 
