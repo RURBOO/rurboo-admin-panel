@@ -107,6 +107,12 @@ const routes = [
         icon: Settings,
         href: "/dashboard/settings",
     },
+    {
+        label: "Service Zones",
+        icon: MapPin, 
+        href: "/dashboard/zones",
+        color: "text-blue-500",
+    },
 ]
 
 export function AppSidebar() {
