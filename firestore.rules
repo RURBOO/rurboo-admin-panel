@@ -296,6 +296,14 @@ service cloud.firestore {
     }
 
     // =========================================================
+    // SERVICE ZONES (Geofencing) 
+    // =========================================================
+    match /service_zones/{zoneId} {
+      allow read: if isAuthenticated(); // Both user/driver apps need to read active zones to block/allow UI
+      allow write: if isAdmin(); // Only admins can draw/toggle/delete polygons
+    }
+
+    // =========================================================
     // DEFAULT DENY
     // =========================================================
     match /{document=**} {
