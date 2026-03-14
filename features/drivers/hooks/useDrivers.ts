@@ -31,6 +31,7 @@ export function useDrivers(dateRange?: DateRange) {
                 driversData.push({
                     id: doc.id,
                     ...doc.data(),
+                    phone: doc.data().phone || doc.data().phoneNumber, // Support both field names
                 } as Driver)
             })
             setDrivers(driversData)

@@ -68,7 +68,7 @@ export function useDashboardStats() {
                 // Get Active Rides Count 
                 const activeRidesQuery = query(
                     collection(db, "rideRequests"),
-                    where("status", "in", ["pending", "accepted", "in_progress", "arrived"])
+                    where("status", "in", ["pending", "accepted", "in_progress", "arrived", "started"])
                 )
                 const activeRidesSnapshot = await getCountFromServer(activeRidesQuery)
                 const activeRidesCount = activeRidesSnapshot.data().count
@@ -99,9 +99,10 @@ export function useDashboardStats() {
 
                 completedRidesSnapshot.docs.forEach((doc) => {
                     const data = doc.data()
-                    // Driver app sets 'finalFare', User app sets 'fare' initially.
+                    // Revenue logic: prioritize finalFare, then fare
                     const fare = data.finalFare || data.fare || 0
-                    const commission = data.commission || 0
+                    // Commission logic: prioritize commission field, fallback to 20% of fare
+                    const commission = data.commission !== undefined ? data.commission : (fare * 0.2)
 
                     totalRevenue += fare
                     platformRevenue += commission
@@ -214,7 +215,7 @@ export function useDashboardStats() {
         // Real-time listener for active rides
         const activeRidesQuery = query(
             collection(db, "rideRequests"),
-            where("status", "in", ["pending", "accepted", "in_progress", "arrived"])
+            where("status", "in", ["pending", "accepted", "in_progress", "arrived", "started"])
         )
         const unsubscribeRides = onSnapshot(activeRidesQuery, (snapshot) => {
             if (isMounted) setStats(prev => ({ ...prev, activeRides: snapshot.size }))

@@ -324,6 +324,14 @@ export default function DriverDetailPage() {
                             <span>{driver.phone || driver.phoneNumber || "N/A"}</span>
                         </div>
                         <div className="flex items-center gap-3">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>Age: {driver.age || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                            <span>Gender: {driver.gender || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
                             <Mail className="h-4 w-4 text-muted-foreground" />
                             <span>{driver.email || "N/A"}</span>
                         </div>

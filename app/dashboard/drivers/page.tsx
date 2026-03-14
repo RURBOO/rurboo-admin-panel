@@ -241,9 +241,9 @@ export default function DriversPage() {
 
     const canActivateDriver = (driver: Driver) => {
         return Boolean(
-            driver.profileImage && driver.profileStatus === 'approved' &&
             driver.licenseImage && driver.licenseStatus === 'approved' &&
-            driver.rcImage && driver.rcStatus === 'approved'
+            driver.rcImage && driver.rcStatus === 'approved' &&
+            driver.vehicleImage && driver.vehicleStatus === 'approved'
         );
     };
 

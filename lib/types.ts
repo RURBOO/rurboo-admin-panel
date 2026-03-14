@@ -13,6 +13,9 @@ export interface Driver {
     status: 'verified' | 'pending' | 'suspended' | 'blocked';
     verificationStatus?: 'approved' | 'pending' | 'rejected';
     verified?: boolean;
+    age?: number;
+    gender?: string;
+    emergencyContactPhone?: string;
     vehicleDetails?: {
         model: string;
         number: string;
@@ -90,6 +93,8 @@ export interface Ride {
     };
     status: 'pending' | 'accepted' | 'arrived' | 'started' | 'completed' | 'cancelled';
     fare: number;
+    finalFare?: number;
+    commission?: number;
     distance?: string;
     duration?: string;
     otp?: string;
