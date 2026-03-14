@@ -28,6 +28,7 @@ import { auth } from "@/lib/firebase"
 import { signOut } from "firebase/auth"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { ThemeToggle } from "./theme-toggle"
 
 const routes = [
     {
@@ -190,19 +191,22 @@ export function AppSidebar() {
 
                 {/* Footer User Profile & Logout */}
                 {user && (
-                    <div className="mt-auto px-4 py-4 border-t border-white/10 bg-slate-900/50 flex flex-col items-start w-full">
-                        <div className="flex items-center gap-2 mb-3 px-1 w-full overflow-hidden">
-                            <UserCircle className="h-6 w-6 text-zinc-400 shrink-0" />
-                            <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-semibold text-white truncate max-w-full">
-                                    {user.email}
-                                </span>
-                                {role && (
-                                    <span className="text-[10px] text-zinc-400 uppercase tracking-wider">
-                                        {role.replace('_', ' ')}
+                    <div className="mt-auto px-4 py-4 border-t border-white/10 bg-slate-900/50 flex flex-col items-start w-full gap-4">
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <UserCircle className="h-6 w-6 text-zinc-400 shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-xs font-semibold text-white truncate max-w-full">
+                                        {user.email}
                                     </span>
-                                )}
+                                    {role && (
+                                        <span className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                                            {role.replace('_', ' ')}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+                            <ThemeToggle />
                         </div>
                         <Button
                             variant="destructive"

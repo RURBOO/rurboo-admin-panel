@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, where, getCountFromServer, getDocs, Timestamp, orderBy, onSnapshot } from "firebase/firestore"
+import { collection, query, where, getCountFromServer, getDocs, Timestamp, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface RevenuePoint {
@@ -77,17 +77,18 @@ export function useDashboardStats() {
                 const sevenDaysAgo = new Date()
                 sevenDaysAgo.setDate(now.getDate() - 7)
 
-                // Fetch all completed rides for total revenue
-                const completedRidesQuery = query(
-                    collection(db, "rideRequests"),
-                    where("status", "==", "completed")
+                // Fetch all rides for revenue calculation (no status filter to avoid index issues)
+                // Filter out actively ongoing rides in-memory, same as Flutter app logic
+                const allRidesQuery = query(
+                    collection(db, "rideRequests")
                 )
-                const completedRidesSnapshot = await getDocs(completedRidesQuery)
+                const allRidesSnapshot = await getDocs(allRidesQuery)
 
                 let totalRevenue = 0
                 let platformRevenue = 0
                 const dailyRevenueMap = new Map<string, number>()
                 const vehicleRevenueMap = new Map<string, number>()
+                const ONGOING_STATUSES = ['pending', 'accepted', 'in_progress', 'arrived', 'started']
 
                 // Initialize last 7 days with 0
                 for (let i = 6; i >= 0; i--) {
@@ -97,10 +98,24 @@ export function useDashboardStats() {
                     dailyRevenueMap.set(dateStr, 0)
                 }
 
-                completedRidesSnapshot.docs.forEach((doc) => {
+                let completedRidesCount = 0
+                let cancelledRidesCount = 0
+
+                allRidesSnapshot.docs.forEach((doc) => {
                     const data = doc.data()
+                    const status = (data.status || '').toLowerCase()
+
+                    // Count completed / cancelled for breakdown chart
+                    if (status === 'completed' || status === 'closed' || status === 'done') completedRidesCount++
+                    if (status === 'cancelled') cancelledRidesCount++
+
+                    // Skip actively ongoing rides for revenue
+                    if (ONGOING_STATUSES.includes(status)) return
+
                     // Revenue logic: prioritize finalFare, then fare
-                    const fare = data.finalFare || data.fare || 0
+                    const fare = (data.finalFare || data.fare || 0) as number
+                    if (fare <= 0) return  // No fare = not a revenue ride
+
                     // Commission logic: prioritize commission field, fallback to 20% of fare
                     const commission = data.commission !== undefined ? data.commission : (fare * 0.2)
 
@@ -123,12 +138,10 @@ export function useDashboardStats() {
                     }
                 })
 
-                // Get Rides Breakdown (Completed vs Cancelled)
-                const completedCount = await getCountFromServer(query(collection(db, "rideRequests"), where("status", "==", "completed")))
-                const cancelledCount = await getCountFromServer(query(collection(db, "rideRequests"), where("status", "==", "cancelled")))
+                // Use in-memory counts computed during the main loop above
                 const ridesBreakdownData = [
-                    { name: 'Completed', value: completedCount.data().count },
-                    { name: 'Cancelled', value: cancelledCount.data().count }
+                    { name: 'Completed', value: completedRidesCount },
+                    { name: 'Cancelled', value: cancelledRidesCount }
                 ]
 
                 // Get Registration Growth over last 7 days
