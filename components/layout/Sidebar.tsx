@@ -145,7 +145,7 @@ export function AppSidebar() {
                 "space-y-4 py-4 flex flex-col h-full bg-slate-900 text-white fixed md:relative z-40 w-64 transition-transform duration-200 ease-in-out md:translate-x-0",
                 isMobileOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="px-3 py-2 flex-1">
+                <div className="px-3 py-2 flex-1 overflow-y-auto">
                     <Link href="/dashboard" className="flex items-center pl-3 mb-14">
                         <div className="p-6">
                             <div className="flex items-center gap-2 font-bold text-2xl mb-8 text-white">

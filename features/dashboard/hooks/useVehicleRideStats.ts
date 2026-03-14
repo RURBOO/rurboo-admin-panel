@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface VehicleRideStats {
@@ -44,69 +44,76 @@ export function useVehicleRideStats() {
                 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
                 const todayTimestamp = Timestamp.fromDate(todayStart)
 
-                // Fetch all rides
-                const ridesRef = collection(db, "rides")
-                const allRidesSnapshot = await getDocs(ridesRef)
-                const totalRides = allRidesSnapshot.size
-
-                // Fetch today's rides
-                const todayQuery = query(
+                // Set up real-time listener for today's completed rides
+                const ridesRef = collection(db, "rideRequests")
+                const todayCompletedQuery = query(
                     ridesRef,
+                    where("status", "==", "completed"),
                     where("createdAt", ">=", todayTimestamp)
                 )
-                const todayRidesSnapshot = await getDocs(todayQuery)
-                const todayRides = todayRidesSnapshot.size
 
-                // Calculate vehicle-specific stats
-                const vehicleStats: VehicleRideStats[] = []
+                const unsubscribe = onSnapshot(todayCompletedQuery, async (snapshot) => {
+                    if (!isMounted) return
 
-                for (const vehicleType of vehicleTypes) {
-                    // Total rides for this vehicle type
-                    const totalVehicleQuery = query(
-                        ridesRef,
-                        where("vehicleType", "==", vehicleType)
-                    )
-                    const totalVehicleDocs = await getDocs(totalVehicleQuery)
+                    const todayRides = snapshot.size
+                    
+                    // We still need total rides. This can be heavy if we use onSnapshot on all lifetime rides.
+                    // For now, fetch lifetime stats once, and keep today's real-time.
+                    const allCompletedQuery = query(ridesRef, where("status", "==", "completed"))
+                    const allRidesSnapshot = await getDocs(allCompletedQuery)
+                    const totalRides = allRidesSnapshot.size
 
-                    // Today's rides for this vehicle type
-                    const todayVehicleQuery = query(
-                        ridesRef,
-                        where("vehicleType", "==", vehicleType),
-                        where("createdAt", ">=", todayTimestamp)
-                    )
-                    const todayVehicleDocs = await getDocs(todayVehicleQuery)
+                    // Calculate vehicle-specific stats based on the latest today snapshot
+                    const vehicleMap = new Map<string, { total: number, today: number }>()
+                    vehicleTypes.forEach(v => vehicleMap.set(v, { total: 0, today: 0 }))
 
-                    vehicleStats.push({
-                        vehicleType,
-                        totalRides: totalVehicleDocs.size,
-                        todayRides: todayVehicleDocs.size
+                    allRidesSnapshot.forEach(doc => {
+                         const vType = doc.data().vehicleType || 'UNKNOWN'
+                         if (vehicleMap.has(vType)) {
+                              vehicleMap.get(vType)!.total++
+                         }
                     })
-                }
 
-                if (isMounted) {
+                    snapshot.forEach(doc => {
+                         const vType = doc.data().vehicleType || 'UNKNOWN'
+                         if (vehicleMap.has(vType)) {
+                              vehicleMap.get(vType)!.today++
+                         }
+                    })
+
+                    const vehicleStats: VehicleRideStats[] = vehicleTypes.map(v => ({
+                        vehicleType: v,
+                        totalRides: vehicleMap.get(v)!.total,
+                        todayRides: vehicleMap.get(v)!.today
+                    }))
+
                     setStats({
                         totalRides,
                         todayRides,
                         vehicleStats,
                         loading: false
                     })
-                }
+                }, (error) => {
+                     console.error("Error observing ride statistics:", error)
+                })
+
+                if (isMounted) setStats(prev => ({ ...prev, loading: false }))
+                
+                return () => unsubscribe()
+
             } catch (error) {
-                console.error("Error fetching ride statistics:", error)
+                console.error("Error setting up ride statistics listener:", error)
                 if (isMounted) {
                     setStats(prev => ({ ...prev, loading: false }))
                 }
             }
         }
 
-        fetchRideStats()
-
-        // Refresh every 60 seconds
-        const interval = setInterval(fetchRideStats, 60000)
+        const cleanupPromise = fetchRideStats()
 
         return () => {
             isMounted = false
-            clearInterval(interval)
+            cleanupPromise.then(cleanup => { if(cleanup) cleanup() })
         }
     }, [])
 

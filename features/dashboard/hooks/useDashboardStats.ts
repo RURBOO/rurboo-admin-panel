@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, where, getCountFromServer, getDocs, Timestamp, orderBy } from "firebase/firestore"
+import { collection, query, where, getCountFromServer, getDocs, Timestamp, orderBy, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface RevenuePoint {
@@ -56,7 +56,7 @@ export function useDashboardStats() {
                 // Get Active Drivers Count
                 const driversQuery = query(
                     collection(db, "drivers"),
-                    where("status", "==", "verified")
+                    where("isOnline", "==", true)
                 )
                 const driversSnapshot = await getCountFromServer(driversQuery)
                 const activeDriversCount = driversSnapshot.data().count
@@ -65,7 +65,7 @@ export function useDashboardStats() {
                 const usersSnapshot = await getCountFromServer(collection(db, "users"))
                 const totalUsersCount = usersSnapshot.data().count
 
-                // Get Active Rides Count (status = 'pending', 'accepted', 'in_progress', 'arrived')
+                // Get Active Rides Count 
                 const activeRidesQuery = query(
                     collection(db, "rideRequests"),
                     where("status", "in", ["pending", "accepted", "in_progress", "arrived"])
@@ -211,12 +211,32 @@ export function useDashboardStats() {
 
         fetchStats()
 
-        // Refresh stats every 60 seconds
-        const interval = setInterval(fetchStats, 60000)
+        // Real-time listener for active rides
+        const activeRidesQuery = query(
+            collection(db, "rideRequests"),
+            where("status", "in", ["pending", "accepted", "in_progress", "arrived"])
+        )
+        const unsubscribeRides = onSnapshot(activeRidesQuery, (snapshot) => {
+            if (isMounted) setStats(prev => ({ ...prev, activeRides: snapshot.size }))
+        })
+
+        // Real-time listener for active drivers
+        const activeDriversQuery = query(
+            collection(db, "drivers"),
+            where("isOnline", "==", true)
+        )
+        const unsubscribeDrivers = onSnapshot(activeDriversQuery, (snapshot) => {
+            if (isMounted) setStats(prev => ({ ...prev, activeDrivers: snapshot.size }))
+        })
+
+        // Refresh heavy stats periodically (30s)
+        const interval = setInterval(fetchStats, 30000)
 
         return () => {
             isMounted = false
             clearInterval(interval)
+            unsubscribeRides()
+            unsubscribeDrivers()
         }
     }, [])
 
