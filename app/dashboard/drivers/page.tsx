@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
     Table,
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, ShieldCheck, ShieldAlert, CheckCircle, XCircle, Download, ArrowUpDown, Calendar as CalendarIcon, Upload } from "lucide-react"
+import { MoreHorizontal, ShieldCheck, ShieldAlert, CheckCircle, XCircle, Download, ArrowUpDown, Calendar as CalendarIcon, Upload, MapPin, Bike, Car, Truck, Zap, Wallet, Users, AlertCircle, WifiIcon } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -51,35 +51,121 @@ import { db } from "@/lib/firebase"
 import { Driver } from "@/lib/types"
 import { useAuth } from "@/features/auth/AuthContext"
 import { logDriverSuspend, logDriverApprove } from "@/lib/adminActions"
+import { reverseGeocode } from "@/lib/reverseGeocode"
+
+const VEHICLE_TYPES = ['bike', 'e-rikshaw', 'auto', 'comfort car', 'big car', 'carrier truck']
+const VEHICLE_LABELS: Record<string, string> = {
+    'bike': 'Bike',
+    'e-rikshaw': 'E-Rikshaw',
+    'auto': 'Auto Rikshaw',
+    'comfort car': 'Comfort Car',
+    'big car': 'Big Car',
+    'carrier truck': 'Carrier Truck',
+    // Legacy Firestore values from older app versions
+    'bike taxi': 'Bike',
+    'bike txi': 'Bike',
+    'biketaxi': 'Bike',
+    'e rikshaw': 'E-Rikshaw',
+    'e-rickshaw': 'E-Rikshaw',
+    'auto rickshaw': 'Auto Rikshaw',
+    'auto rikshaw': 'Auto Rikshaw',
+    'autorickshaw': 'Auto Rikshaw',
+    'comfort': 'Comfort Car',
+    'car': 'Comfort Car',
+    'suv': 'Big Car',
+    'truck': 'Carrier Truck',
+    'carrier': 'Carrier Truck',
+}
+const getVehicleLabel = (v?: string) => {
+    if (!v) return 'N/A'
+    return VEHICLE_LABELS[v.toLowerCase().trim()] || v
+}
 
 export default function DriversPage() {
     const [dateRange, setDateRange] = useState<{ from: Date, to?: Date } | undefined>()
     const { drivers, loading } = useDrivers(dateRange)
     const { user } = useAuth()
     const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [vehicleFilter, setVehicleFilter] = useState<string>("all")
     const [sortFilter, setSortFilter] = useState<string>("recent")
     const [exportRange, setExportRange] = useState<string>("all")
+    const [commissionFilter, setCommissionFilter] = useState<string>("all")
+    const [onlineFilter, setOnlineFilter] = useState<string>("all")
     const [selectedDriver, setSelectedDriver] = useState<any>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [isAddDriverOpen, setIsAddDriverOpen] = useState(false)
     const [actionType, setActionType] = useState<'suspend' | 'approve' | 'activate' | 'verify_vehicle'>('suspend')
     const [processing, setProcessing] = useState(false)
     const [newDriverData, setNewDriverData] = useState({ name: '', email: '', phone: '' })
+    const [locationNames, setLocationNames] = useState<Record<string, string>>({})
     const router = useRouter()
 
-    const handleExport = () => {
-        let exportables = statusFilter === "all"
-            ? drivers
-            : drivers.filter(d => d.status === statusFilter)
+    // Helper: pick the best available location coords from any field
+    const getBestLocation = (d: any): { lat: number; lng: number; isLive: boolean } | null => {
+        // Standard GeoPoint field (driver app saves this every 30s)
+        if (d.currentLocation?.latitude && d.currentLocation?.longitude)
+            return { lat: d.currentLocation.latitude, lng: d.currentLocation.longitude, isLive: !!d.isOnline }
+        // GeoFlutterFire format: location.geopoint (used for proximity queries)
+        if (d.location?.geopoint?.latitude && d.location?.geopoint?.longitude)
+            return { lat: d.location.geopoint.latitude, lng: d.location.geopoint.longitude, isLive: !!d.isOnline }
+        // Fallback: lastLocation field
+        if (d.lastLocation?.latitude && d.lastLocation?.longitude)
+            return { lat: d.lastLocation.latitude, lng: d.lastLocation.longitude, isLive: false }
+        // Plain location object
+        if (d.location?.latitude && d.location?.longitude)
+            return { lat: d.location.latitude, lng: d.location.longitude, isLive: false }
+        return null
+    }
 
-        const dataToExport = exportables.map(d => ({
+    // Reverse geocode all available locations whenever drivers list updates
+    useEffect(() => {
+        const pending = drivers.filter(d => getBestLocation(d) !== null && locationNames[d.id] === undefined)
+        if (pending.length === 0) return
+        pending.forEach(async (d) => {
+            const loc = getBestLocation(d)!
+            const name = await reverseGeocode(loc.lat, loc.lng)
+            // Only update if we got a result (don't cache null so refresh can retry)
+            if (name) setLocationNames(prev => ({ ...prev, [d.id]: `${name}|${loc.isLive}` }))
+        })
+    }, [drivers])
+
+    const formatDateTime = (ts: any) => {
+        if (!ts) return 'N/A'
+        const d = ts?.toDate ? ts.toDate() : new Date(ts)
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+    }
+
+    const getLocationLabel = (driver: any) => {
+        // Priority 1: geocoded place name (live or last known)
+        if (locationNames[driver.id]) {
+            const [name, isLive] = locationNames[driver.id].split('|')
+            if (name) return isLive === 'true' ? `${name} 📍` : `${name} 🕐`
+        }
+        // Priority 2: registration address
+        if (driver.address) {
+            const parts = driver.address.split(',')
+            return parts.length > 1 ? parts.slice(-2).join(',').trim() : driver.address
+        }
+        return null
+    }
+
+    const handleExport = () => {
+        const dataToExport = filteredDrivers.map((d, idx) => ({
+            "S.No": idx + 1,
             "Name": d.name || "N/A",
             "Email": d.email || "N/A",
-            "Phone Number": d.phoneNumber || "N/A",
+            "Phone Number": d.phoneNumber || d.phone || "N/A",
+            "Vehicle Type": getVehicleLabel(d.vehicleType),
+            "Vehicle Number": d.vehicleNumber || "N/A",
             "Status": d.status || "N/A",
-            "Joined Date": new Date(d.createdAt?.toDate?.() || Date.now()).toLocaleDateString(),
+            "Wallet Balance (₹)": d.walletBalance || 0,
+            "Pending Commission (₹)": d.pendingCommission || 0,
             "Total Rides": d.totalRides || 0,
-            "Rating": d.rating || 5.0
+            "Rating": d.rating || "N/A",
+            "Location": d.address || "N/A",
+            "Joined Date": d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString('en-IN') : "N/A",
+            "Joined Time": d.createdAt?.toDate ? d.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "N/A",
         }))
 
         exportToExcel(dataToExport, `Rurboo_Drivers_Export`)
@@ -185,10 +271,21 @@ export default function DriversPage() {
         }
     }
 
-    // Filter drivers based on selected status
-    let filteredDrivers = statusFilter === "all"
-        ? drivers
-        : drivers.filter(d => d.status === statusFilter)
+    // Filter drivers
+    let filteredDrivers = drivers.filter(d => {
+        const statusMatch = statusFilter === 'all' || d.status === statusFilter
+        const vt = (d.vehicleType || '').toLowerCase()
+        const vehicleMatch = vehicleFilter === 'all' || vt === vehicleFilter
+        const commissionMatch = commissionFilter === 'all'
+            || (commissionFilter === 'has_pending' && (d.pendingCommission || 0) > 0)
+            || (commissionFilter === 'no_pending' && (d.pendingCommission || 0) === 0)
+            || (commissionFilter === 'negative_wallet' && (d.walletBalance || 0) < 0)
+        const isOnline = d.isOnline === true
+        const onlineMatch = onlineFilter === 'all'
+            || (onlineFilter === 'online' && isOnline)
+            || (onlineFilter === 'offline' && !isOnline)
+        return statusMatch && vehicleMatch && commissionMatch && onlineMatch
+    })
 
     // Sort drivers based on selection
     filteredDrivers = [...filteredDrivers].sort((a, b) => {
@@ -256,9 +353,9 @@ export default function DriversPage() {
                         Manage driver verification, approval, and account status.
                     </p>
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center flex-wrap">
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-[160px]">
                             <SelectValue placeholder="Filter by status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -269,8 +366,42 @@ export default function DriversPage() {
                             <SelectItem value="pending">Pending</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Select value={sortFilter} onValueChange={setSortFilter}>
+                    <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
                         <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Vehicle type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Vehicles</SelectItem>
+                            {VEHICLE_TYPES.map(v => (
+                                <SelectItem key={v} value={v}>{VEHICLE_LABELS[v]}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {/* Pending Commission / Wallet Filter */}
+                    <Select value={commissionFilter} onValueChange={setCommissionFilter}>
+                        <SelectTrigger className="w-[190px]">
+                            <SelectValue placeholder="Commission filter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Drivers</SelectItem>
+                            <SelectItem value="has_pending">Has Pending Commission</SelectItem>
+                            <SelectItem value="no_pending">No Pending Commission</SelectItem>
+                            <SelectItem value="negative_wallet">Negative Wallet (₹ &lt; 0)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {/* Online / Offline Filter */}
+                    <Select value={onlineFilter} onValueChange={setOnlineFilter}>
+                        <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="Online status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="online">🟢 Online</SelectItem>
+                            <SelectItem value="offline">⚫ Offline</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={sortFilter} onValueChange={setSortFilter}>
+                        <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
@@ -289,6 +420,55 @@ export default function DriversPage() {
                 </div>
             </div>
 
+            {/* ── Stats Cards ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Total Drivers */}
+                <div className="rounded-xl border bg-card p-5 flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Drivers</span>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="text-3xl font-bold">{drivers.length}</div>
+                    <div className="text-xs text-muted-foreground">{filteredDrivers.length} shown (filtered)</div>
+                </div>
+
+                {/* Online Now */}
+                <div className="rounded-xl border bg-card p-5 flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Online Now</span>
+                        <WifiIcon className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="text-3xl font-bold text-green-600">
+                        {drivers.filter(d => d.isOnline).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Currently active</div>
+                </div>
+
+                {/* Total Wallet Balance */}
+                <div className="rounded-xl border bg-card p-5 flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Wallet</span>
+                        <Wallet className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className="text-3xl font-bold text-blue-600">
+                        ₹{drivers.reduce((sum, d) => sum + (d.walletBalance || 0), 0).toLocaleString('en-IN')}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Combined wallet balance</div>
+                </div>
+
+                {/* Low Balance Alert */}
+                <div className="rounded-xl border bg-card p-5 flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Low Balance</span>
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div className="text-3xl font-bold text-orange-600">
+                        {drivers.filter(d => (d.walletBalance || 0) < 100).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Drivers with wallet &lt; ₹100</div>
+                </div>
+            </div>
+
             <Tabs defaultValue="all" className="w-full">
                 <TabsList className="mb-6 p-1 bg-secondary/50 border rounded-lg h-auto inline-flex flex-wrap gap-2">
                     <TabsTrigger value="all" className="py-2 px-4 shadow-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Driver Roster</TabsTrigger>
@@ -301,44 +481,49 @@ export default function DriversPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-12 text-center">#</TableHead>
                                     <TableHead>Driver</TableHead>
                                     <TableHead>Phone</TableHead>
+                                    <TableHead>Location</TableHead>
                                     <TableHead>Vehicle</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead>Rating</TableHead>
-                                    <TableHead>Total Rides</TableHead>
+                                    <TableHead>Rides</TableHead>
+                                    <TableHead>Joined</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center h-24">
+                                        <TableCell colSpan={10} className="text-center h-24">
                                             Loading drivers...
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredDrivers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center h-24">
+                                        <TableCell colSpan={10} className="text-center h-24">
                                             No drivers found for the selected filter.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredDrivers.map((driver) => (
+                                    filteredDrivers.map((driver, index) => (
                                         <TableRow
                                             key={driver.id}
                                             className="cursor-pointer hover:bg-muted/50"
                                             onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}
                                         >
+                                            {/* S.No */}
+                                            <TableCell className="text-center text-xs font-mono text-muted-foreground">{index + 1}</TableCell>
+                                            {/* Driver Name Cell */}
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     <Avatar>
                                                         <AvatarImage src={driver.photoURL} />
                                                         <AvatarFallback>{driver.name?.charAt(0) || "D"}</AvatarFallback>
                                                     </Avatar>
-                                                    <div>
+                                                     <div>
                                                         <div className="font-medium">{driver.name || "N/A"}</div>
-                                                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground flex-wrap">
                                                             {driver.verified && (
                                                                 <span className="flex items-center gap-1">
                                                                     <ShieldCheck className="h-3 w-3 text-blue-600" />
@@ -349,23 +534,50 @@ export default function DriversPage() {
                                                                 {driver.isOnline ? "Online" : "Offline"}
                                                             </Badge>
                                                         </div>
+                                                        {/* Wallet + Pending Commission */}
+                                                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+                                                                <Wallet className="h-2.5 w-2.5" />
+                                                                ₹{(driver.walletBalance || 0).toLocaleString('en-IN')}
+                                                            </span>
+                                                            {(driver.pendingCommission || 0) > 0 && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 rounded-full px-2 py-0.5">
+                                                                    <AlertCircle className="h-2.5 w-2.5" />
+                                                                    Pending ₹{(driver.pendingCommission || 0).toLocaleString('en-IN')}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>{driver.phone || driver.phoneNumber || "N/A"}</TableCell>
+                                            {/* Location */}
+                                            <TableCell>
+                                                {getLocationLabel(driver) ? (
+                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                        <MapPin className="h-3 w-3 shrink-0 text-blue-500" />
+                                                        <span title={getLocationLabel(driver) ?? ''}>{getLocationLabel(driver)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">—</span>
+                                                )}
+                                            </TableCell>
+                                            {/* Vehicle */}
                                             <TableCell>
                                                 <div>
-                                                    <div className="font-medium">{driver.vehicleType || "N/A"}</div>
-                                                    <div className="text-sm text-muted-foreground">{driver.vehicleNumber || ""}</div>
+                                                    <div className="font-medium text-sm">{getVehicleLabel(driver.vehicleType)}</div>
+                                                    <div className="text-xs text-muted-foreground">{driver.vehicleNumber || ""}</div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>{getStatusBadge(driver.status, driver.verified || false)}</TableCell>
+                                            <TableCell>{driver.totalRides || 0}</TableCell>
+                                            {/* Joined Date+Time */}
                                             <TableCell>
-                                                <div className="flex items-center gap-1">
-                                                    ⭐ {driver.rating?.toFixed(1) || "N/A"}
+                                                <div className="text-xs">
+                                                    <div>{driver.createdAt?.toDate ? driver.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</div>
+                                                    <div className="text-muted-foreground">{driver.createdAt?.toDate ? driver.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}</div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{driver.totalRides || 0}</TableCell>
                                             <TableCell className="text-right">
                                                 <div onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenu>

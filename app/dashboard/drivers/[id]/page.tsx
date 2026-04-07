@@ -69,6 +69,39 @@ export default function DriverDetailPage() {
         }
     };
 
+    const toggleVehicleActivation = async (vehicleId: string, currentIsActive: boolean) => {
+        if (!admin || !driver) return;
+        try {
+            const vehicleRef = doc(db, "drivers", driver.id, "vehicles", vehicleId);
+            const newIsActive = !currentIsActive;
+            await updateDoc(vehicleRef, { isActive: newIsActive });
+            
+            // Recompute active vehicle types
+            const newVehicles = extraVehicles.map(v => 
+                v.id === vehicleId ? { ...v, isActive: newIsActive } : v
+            );
+            
+            const activeActiveVehicles = newVehicles.filter(v => v.isActive);
+            const activeTypes = Array.from(new Set(activeActiveVehicles.map(v => v.vehicleType)));
+            
+            const driverRef = doc(db, "drivers", driver.id);
+            const updateData: any = { activeVehicleTypes: activeTypes };
+            if (activeActiveVehicles.length > 0) {
+               updateData.vehicleType = activeActiveVehicles[0].vehicleType;
+               updateData.vehicleModel = activeActiveVehicles[0].vehicleModel;
+               updateData.vehicleNumber = activeActiveVehicles[0].vehicleNumber;
+               updateData.vehicleImage = activeActiveVehicles[0].vehicleImage;
+            }
+            await updateDoc(driverRef, updateData);
+            
+            toast.success(`Vehicle ${newIsActive ? 'activated' : 'deactivated'} successfully`);
+            setExtraVehicles(newVehicles);
+        } catch (error) {
+            console.error("Error toggling vehicle:", error);
+            toast.error("Failed to toggle vehicle");
+        }
+    };
+
     const openActionDialog = (type: 'suspended' | 'verified' | 'blocked' | 'verify_vehicle') => {
         setActionType(type)
         setIsDialogOpen(true)
@@ -506,9 +539,14 @@ export default function DriverDetailPage() {
 
                 <TabsContent value="rides" className="mt-4">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Recent Rides</CardTitle>
-                            <CardDescription>Last 10 rides completed by this driver.</CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Recent Rides</CardTitle>
+                                <CardDescription>Last 10 rides completed by this driver. Click any ride to view details.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/rides?driverId=${driverId}`)}>
+                                View All Rides →
+                            </Button>
                         </CardHeader>
                         <CardContent>
                             {loadingRides ? (
@@ -519,21 +557,53 @@ export default function DriverDetailPage() {
                             ) : rides.length === 0 ? (
                                 <div className="text-center py-8 text-muted-foreground">No rides found.</div>
                             ) : (
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {rides.map(ride => (
-                                        <div key={ride.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                                            <div>
-                                                <div className="font-medium">Ride #{ride.id.slice(0, 8)}</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {ride.createdAt?.toLocaleDateString()} • {ride.createdAt?.toLocaleTimeString()}
+                                        <div
+                                            key={ride.id}
+                                            className="border rounded-lg p-4 hover:bg-muted/40 cursor-pointer transition-colors"
+                                            onClick={() => router.push(`/dashboard/rides`)}
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    {/* Ride ID + Status */}
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-semibold text-sm text-blue-600">#{ride.id.slice(0, 8)}</span>
+                                                        <Badge variant="outline" className={
+                                                            ride.status === 'completed' ? 'text-green-600 border-green-200 bg-green-50' :
+                                                            ride.status === 'cancelled' ? 'text-red-600 border-red-200 bg-red-50' :
+                                                            ride.status === 'ongoing' ? 'text-blue-600 border-blue-200 bg-blue-50' : ''
+                                                        }>{ride.status}</Badge>
+                                                    </div>
+                                                    {/* Pickup → Drop */}
+                                                    {ride.pickupAddress || ride.dropAddress ? (
+                                                        <div className="text-xs text-muted-foreground space-y-0.5">
+                                                            <div className="flex items-start gap-1">
+                                                                <span className="text-green-600 font-bold mt-0.5">↑</span>
+                                                                <span className="truncate">{ride.pickupAddress || ride.pickupLocation || 'N/A'}</span>
+                                                            </div>
+                                                            <div className="flex items-start gap-1">
+                                                                <span className="text-red-600 font-bold mt-0.5">↓</span>
+                                                                <span className="truncate">{ride.dropAddress || ride.dropLocation || 'N/A'}</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+                                                    {/* Date + Distance */}
+                                                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                                                        <span>{ride.createdAt?.toLocaleDateString('en-IN')} • {ride.createdAt?.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        {ride.distance && <span>• {ride.distance} km</span>}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="font-bold">₹{ride.fare?.toFixed(2)}</div>
-                                                <Badge variant="outline" className={
-                                                    ride.status === 'completed' ? 'text-green-600 border-green-200' :
-                                                        ride.status === 'cancelled' ? 'text-red-600 border-red-200' : ''
-                                                }>{ride.status}</Badge>
+                                                {/* Fare + Commission */}
+                                                <div className="text-right shrink-0">
+                                                    <div className="font-bold text-base">₹{(ride.fare || 0).toFixed(2)}</div>
+                                                    {ride.commission || ride.commissionAmount ? (
+                                                        <div className="text-xs text-orange-600 font-medium">Commission: ₹{(ride.commission || ride.commissionAmount || 0).toFixed(2)}</div>
+                                                    ) : null}
+                                                    {ride.vehicleType && (
+                                                        <div className="text-xs text-muted-foreground mt-0.5">{ride.vehicleType}</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -724,6 +794,16 @@ export default function DriverDetailPage() {
                                                             onClick={() => verifyExtraVehicle(vehicle.id)}
                                                         >
                                                             {verifyingVehicleId === vehicle.id ? 'Verifying...' : 'Approve Vehicle'}
+                                                        </Button>
+                                                    )}
+                                                    {vehicle.isVerified && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-full"
+                                                            onClick={() => toggleVehicleActivation(vehicle.id, vehicle.isActive)}
+                                                        >
+                                                            {vehicle.isActive ? 'Deactivate Vehicle' : 'Activate Vehicle'}
                                                         </Button>
                                                     )}
                                                 </div>

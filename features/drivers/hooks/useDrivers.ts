@@ -28,10 +28,13 @@ export function useDrivers(dateRange?: DateRange) {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const driversData: Driver[] = []
             snapshot.forEach((doc) => {
+                const data = doc.data()
                 driversData.push({
                     id: doc.id,
-                    ...doc.data(),
-                    phone: doc.data().phone || doc.data().phoneNumber, // Support both field names
+                    ...data,
+                    phone: data.phone || data.phoneNumber,
+                    // Map multiple possible field names for pending commission
+                    pendingCommission: data.pendingCommission ?? data.commissionDue ?? data.commission_pending ?? data.dueCommission ?? 0,
                 } as Driver)
             })
             setDrivers(driversData)
@@ -42,7 +45,7 @@ export function useDrivers(dateRange?: DateRange) {
         })
 
         return () => unsubscribe()
-    }, [])
+    }, [dateRange?.from?.toISOString(), dateRange?.to?.toISOString()])
 
     const updateDriverStatus = async (driverId: string, status: string) => {
         try {

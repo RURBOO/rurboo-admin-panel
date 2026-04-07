@@ -181,6 +181,12 @@ export default function UserDetailPage() {
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             <span>Joined {user.createdAt?.toDate?.()?.toLocaleDateString() || "N/A"}</span>
                         </div>
+                        {user.address && (
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                <span className="text-sm">{user.address}</span>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -22,9 +22,10 @@ import { formatDistanceToNow } from "date-fns"
 
 export default function SettingsPage() {
     const { user } = useAuth()
-    const { config, toggleMaintenanceMode } = useAppConfig()
+    const { config, toggleMaintenanceMode, updateSearchRadius } = useAppConfig()
 
     const [name, setName] = useState("")
+    const [radiusInput, setRadiusInput] = useState("")
     const [loading, setLoading] = useState(false)
     const [resetSent, setResetSent] = useState(false)
     const [preferences, setPreferences] = useState({
@@ -42,6 +43,27 @@ export default function SettingsPage() {
             fetchAdminData()
         }
     }, [user])
+
+    useEffect(() => {
+        // Initialize radiusInput once config is loaded or changes remotely
+        if (config?.driver_search_radius_km) {
+            setRadiusInput(config.driver_search_radius_km.toString())
+        }
+    }, [config?.driver_search_radius_km])
+
+    const handleUpdateRadius = async () => {
+        const parsed = parseFloat(radiusInput)
+        if (isNaN(parsed) || parsed <= 0 || parsed > 50) {
+            toast.error("Please enter a valid radius between 0.1 and 50 km")
+            return
+        }
+        try {
+            await updateSearchRadius(parsed)
+            toast.success(`Driver search radius updated to ${parsed}km`)
+        } catch (e) {
+            toast.error("Failed to update search radius")
+        }
+    }
 
     const fetchAdminData = async () => {
         if (!user) return
@@ -431,6 +453,26 @@ export default function SettingsPage() {
                         <Button variant="outline" size="sm" onClick={() => window.location.href = '/dashboard/pricing'}>
                             View Pricing →
                         </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                            <div className="font-medium">Driver Search Radius (km)</div>
+                            <div className="text-sm text-muted-foreground">Maximum distance to ping drivers for a new ride</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Input 
+                                type="number" 
+                                value={radiusInput} 
+                                onChange={(e) => setRadiusInput(e.target.value)} 
+                                className="w-24 h-9"
+                                step="0.5"
+                                min="0.1"
+                            />
+                            <Button size="sm" onClick={handleUpdateRadius}>
+                                Save
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

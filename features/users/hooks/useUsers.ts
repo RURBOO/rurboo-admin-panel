@@ -34,11 +34,20 @@ export function useUsers(dateRange?: DateRange) {
             const usersData: User[] = await Promise.all(rawDocs.map(async (data) => {
                 let actualTotalRides = data.totalRides || 0;
                 try {
-                    const ridesQuery = query(collection(db, "rides"), where("userId", "==", data.id));
-                    const ridesCountSnap = await getCountFromServer(ridesQuery);
-                    actualTotalRides = ridesCountSnap.data().count;
+                    // Count rides where status is 'completed' OR 'closed' — both count as complete
+                    const [completedSnap, closedSnap] = await Promise.all([
+                        getCountFromServer(query(collection(db, "rides"),
+                            where("userId", "==", data.id),
+                            where("status", "==", "completed")
+                        )),
+                        getCountFromServer(query(collection(db, "rides"),
+                            where("userId", "==", data.id),
+                            where("status", "==", "closed")
+                        ))
+                    ])
+                    actualTotalRides = completedSnap.data().count + closedSnap.data().count;
                 } catch (e) {
-                    console.error("Error fetching rides count for user", e);
+                    console.error("Error fetching rides count for user", data.id, e);
                 }
 
                 return {
@@ -55,7 +64,7 @@ export function useUsers(dateRange?: DateRange) {
         })
 
         return () => unsubscribe()
-    }, [])
+    }, [dateRange?.from?.toISOString(), dateRange?.to?.toISOString()])
 
     const updateWalletBalance = async (userId: string, amount: number, type: 'recharge' | 'deduct') => {
         try {

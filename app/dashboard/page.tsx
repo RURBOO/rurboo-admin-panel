@@ -38,14 +38,22 @@ export default function DashboardPage() {
     // Format vehicle type for display
     const formatVehicleType = (type: string) => {
         const mapping: { [key: string]: string } = {
-            "BIKE_TAXI": "Bike Taxi",
-            "AUTO_RICKSHAW": "Auto Rickshaw",
-            "E_RICKSHAW": "E-Rickshaw",
-            "CAR_MINI": "Car/Mini",
-            "SUV_XL": "SUV/XL",
-            "TRUCK_CARRIER": "Truck/Carrier"
+            // New exact names
+            "bike": "Bike",
+            "e-rikshaw": "E-Rikshaw",
+            "auto": "Auto Rikshaw",
+            "comfort car": "Comfort Car",
+            "big car": "Big Car",
+            "carrier truck": "Carrier Truck",
+            // Legacy keys (backward compat)
+            "BIKE_TAXI": "Bike",
+            "AUTO_RICKSHAW": "Auto Rikshaw",
+            "E_RICKSHAW": "E-Rikshaw",
+            "CAR_MINI": "Comfort Car",
+            "SUV_XL": "Big Car",
+            "TRUCK_CARRIER": "Carrier Truck"
         }
-        return mapping[type] || type
+        return mapping[type] || mapping[type.toLowerCase()] || type
     }
 
     const stats = [

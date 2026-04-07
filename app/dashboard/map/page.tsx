@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select"
 import { useLiveLocations } from "@/features/map/hooks/useLiveLocations"
 import { useAdminRole } from "@/features/admin/hooks/useAdminRole"
-import { MapPin, Bike, Car, User, Lock } from "lucide-react"
+import { MapPin, Bike, Car, User, Lock, Truck, Zap } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -26,6 +26,46 @@ import { DemandHeatmapPanel } from "./components/DemandHeatmapPanel"
 const defaultCenter = {
     lat: 28.6139,  // New Delhi coordinates
     lng: 77.2090
+}
+
+// Maps any variation of vehicle type string → display label
+const VEHICLE_LABELS: Record<string, string> = {
+    // Exact new key names
+    'bike': 'Bike',
+    'e-rikshaw': 'E-Rikshaw',
+    'auto': 'Auto Rikshaw',
+    'comfort car': 'Comfort Car',
+    'big car': 'Big Car',
+    'carrier truck': 'Carrier Truck',
+    // Actual Firestore stored values (old app versions)
+    'bike taxi': 'Bike',
+    'bike txi': 'Bike',
+    'biketaxi': 'Bike',
+    'e rikshaw': 'E-Rikshaw',
+    'e-rickshaw': 'E-Rikshaw',
+    'auto rickshaw': 'Auto Rikshaw',
+    'auto rikshaw': 'Auto Rikshaw',
+    'autorickshaw': 'Auto Rikshaw',
+    'comfort': 'Comfort Car',
+    'car': 'Comfort Car',
+    'suv': 'Big Car',
+    'truck': 'Carrier Truck',
+    'carrier': 'Carrier Truck',
+}
+
+const getVehicleLabel = (vehicleType?: string) => {
+    if (!vehicleType) return 'Unknown'
+    const key = vehicleType.toLowerCase().trim()
+    return VEHICLE_LABELS[key] || vehicleType
+}
+
+const getVehicleIcon = (vehicleType?: string) => {
+    const vt = (vehicleType || '').toLowerCase().trim()
+    if (vt.includes('bike')) return <Bike className="h-3 w-3" />
+    if (vt.includes('e-rik') || vt.includes('eriksh') || vt.includes('electric') || vt === 'e-rikshaw') return <Zap className="h-3 w-3" />
+    if (vt.includes('auto')) return <Zap className="h-3 w-3" />
+    if (vt.includes('truck') || vt.includes('carrier')) return <Truck className="h-3 w-3" />
+    return <Car className="h-3 w-3" />
 }
 
 const mapContainerStyle = {
@@ -77,9 +117,8 @@ function LiveMapContent() {
     const filteredDrivers = useMemo(() => {
         if (vehicleFilter === "all") return drivers
         return drivers.filter(d => {
-            let type = d.vehicleType || "Unknown";
-            type = type.charAt(0).toUpperCase() + type.slice(1);
-            return type === vehicleFilter;
+            const vt = (d.vehicleType || '').toLowerCase()
+            return vehicleFilter === 'all' || vt === vehicleFilter
         })
     }, [drivers, vehicleFilter])
 
@@ -208,11 +247,12 @@ function LiveMapContent() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Vehicles ({drivers.length})</SelectItem>
-                                {Object.entries(vehicleStats).map(([type, count]) => (
-                                    <SelectItem key={type} value={type}>
-                                        {type} ({count})
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="bike">Bike</SelectItem>
+                                <SelectItem value="e-rikshaw">E-Rikshaw</SelectItem>
+                                <SelectItem value="auto">Auto Rikshaw</SelectItem>
+                                <SelectItem value="comfort car">Comfort Car</SelectItem>
+                                <SelectItem value="big car">Big Car</SelectItem>
+                                <SelectItem value="carrier truck">Carrier Truck</SelectItem>
                             </SelectContent>
                         </Select>
                     )}
@@ -252,14 +292,14 @@ function LiveMapContent() {
 
                         {/* Dynamically render top 2 vehicle types if available, otherwise fallback */}
                         {Object.entries(vehicleStats)
-                            .sort((a, b) => b[1] - a[1]) // Sort by highest count
+                            .sort((a, b) => b[1] - a[1])
                             .slice(0, 2)
                             .map(([type, count]) => (
                                 <Card key={type}>
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                            {type.toLowerCase().includes('bike') ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}
-                                            {type}
+                                            {getVehicleIcon(type)}
+                                            {getVehicleLabel(type)}
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent>
@@ -401,8 +441,8 @@ function LiveMapContent() {
                                                     <div className="text-[10px] text-muted-foreground capitalize flex items-center gap-1">
                                                         {item.type === 'driver' ? (
                                                             <>
-                                                                {(item.vehicleType?.toLowerCase().includes('bike')) ? <Bike className="h-3 w-3" /> : <Car className="h-3 w-3" />}
-                                                                {item.vehicleType || "Unknown"}
+                                                                {getVehicleIcon(item.vehicleType)}
+                                                                {getVehicleLabel(item.vehicleType)}
                                                             </>
                                                         ) : (
                                                             <>

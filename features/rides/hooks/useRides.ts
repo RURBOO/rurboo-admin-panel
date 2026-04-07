@@ -37,6 +37,10 @@ export function useRides(dateRange?: DateRange) {
                 ridesData.push({
                     id: doc.id,
                     ...data,
+                    // Normalize name fields from various possible keys
+                    userName: data.userName || data.passengerName || data.riderName || undefined,
+                    driverName: data.driverName || undefined,
+                    cancelReason: data.cancelReason || data.cancellationReason || data.reason || undefined,
                     // Parse createdAt depending on what format exists, fallback to now
                     timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : 'Now'
                 } as Ride)

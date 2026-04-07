@@ -30,11 +30,21 @@ export interface Driver {
     isActive?: boolean;
     isOnline?: boolean;
     walletBalance?: number;
+    pendingCommission?: number;
     createdAt?: Timestamp;
     currentLocation?: {
         latitude: number;
         longitude: number;
         lastUpdated?: Timestamp;
+    };
+    lastLocation?: {
+        latitude: number;
+        longitude: number;
+        lastUpdated?: Timestamp;
+    };
+    location?: {
+        latitude: number;
+        longitude: number;
     };
     updatedAt?: Timestamp;
     updatedBy?: string;
@@ -69,6 +79,7 @@ export interface User {
     blockedAt?: Timestamp | null;
     blockedReason?: string | null;
     walletBalance?: number; // Added walletBalance
+    address?: string;
     createdAt?: Timestamp;
     currentLocation?: {
         latitude: number;
@@ -81,12 +92,18 @@ export interface Ride {
     id: string;
     driverId?: string;
     userId: string;
-    pickupLocation: {
+    pickupAddress?: string;
+    destinationAddress?: string;
+    pickupLocation?: {
         address: string;
         latitude: number;
         longitude: number;
     };
-    dropLocation: {
+    pickupLoc?: {
+        address: string;
+        coordinates?: any;
+    };
+    dropLocation?: {
         address: string;
         latitude: number;
         longitude: number;
@@ -98,6 +115,10 @@ export interface Ride {
     distance?: string;
     duration?: string;
     otp?: string;
+    vehicleCategory?: string;
+    userName?: string;
+    driverName?: string;
+    cancelReason?: string;
     timestamp: Timestamp | string; // Adjusting timestamp as it can be assigned a string in useRides.ts
     createdAt?: Timestamp;
 }

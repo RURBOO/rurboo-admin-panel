@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
     Table,
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, Ban, CheckCircle, Shield, Download, ArrowUpDown, Calendar as CalendarIcon, Upload } from "lucide-react"
+import { MoreHorizontal, Ban, CheckCircle, Shield, Download, ArrowUpDown, Calendar as CalendarIcon, Upload, MapPin } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -47,6 +47,7 @@ import { doc, updateDoc, serverTimestamp, collection, addDoc } from "firebase/fi
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/features/auth/AuthContext"
 import { logUserBlock, logUserUnblock } from "@/lib/adminActions"
+import { reverseGeocode } from "@/lib/reverseGeocode"
 
 export default function UsersPage() {
     const [dateRange, setDateRange] = useState<{ from: Date, to?: Date } | undefined>()
@@ -61,7 +62,44 @@ export default function UsersPage() {
     const [actionType, setActionType] = useState<'block' | 'unblock'>('block')
     const [processing, setProcessing] = useState(false)
     const [newUserData, setNewUserData] = useState({ name: '', email: '', phone: '' })
+    const [locationNames, setLocationNames] = useState<Record<string, string>>({})
     const router = useRouter()
+
+    // Helper: pick best available location
+    const getBestLocation = (u: any): { lat: number; lng: number; isLive: boolean } | null => {
+        if (u.currentLocation?.latitude && u.currentLocation?.longitude)
+            return { lat: u.currentLocation.latitude, lng: u.currentLocation.longitude, isLive: true }
+        if (u.lastLocation?.latitude && u.lastLocation?.longitude)
+            return { lat: u.lastLocation.latitude, lng: u.lastLocation.longitude, isLive: false }
+        if (u.location?.latitude && u.location?.longitude)
+            return { lat: u.location.latitude, lng: u.location.longitude, isLive: false }
+        return null
+    }
+
+    // Reverse geocode all available locations whenever users list updates
+    useEffect(() => {
+        const pending = users.filter((u: any) => getBestLocation(u) !== null && locationNames[u.id] === undefined)
+        if (pending.length === 0) return
+        pending.forEach(async (u: any) => {
+            const loc = getBestLocation(u)!
+            const name = await reverseGeocode(loc.lat, loc.lng)
+            if (name) setLocationNames(prev => ({ ...prev, [u.id]: `${name}|${loc.isLive}` }))
+        })
+    }, [users])
+
+    const getLocationLabel = (u: any) => {
+        // Priority 1: geocoded place name (live 📍 or last known 🕐)
+        if (locationNames[u.id]) {
+            const [name, isLive] = locationNames[u.id].split('|')
+            if (name) return isLive === 'true' ? `${name} \ud83d\udccd` : `${name} \ud83d\udd50`
+        }
+        // Priority 2: registration address
+        if (u.address) {
+            const parts = u.address.split(',')
+            return parts.length > 1 ? parts.slice(-2).join(',').trim() : u.address
+        }
+        return null
+    }
 
     const handleExport = () => {
         const dataToExport = filteredUsers.map(u => ({
@@ -162,16 +200,18 @@ export default function UsersPage() {
     // Sort users based on selection
     filteredUsers = [...filteredUsers].sort((a, b) => {
         if (sortFilter === 'alphabetical') {
-            return (a.name || "").localeCompare(b.name || "");
-        } else if (sortFilter === 'top') {
-            return (b.totalRides || 0) - (a.totalRides || 0);
+            return (a.name || "").localeCompare(b.name || "")
+        } else if (sortFilter === 'top' || sortFilter === 'rides_high') {
+            return (b.totalRides || 0) - (a.totalRides || 0)
+        } else if (sortFilter === 'rides_low') {
+            return (a.totalRides || 0) - (b.totalRides || 0)
         } else {
             // Default: recent
-            const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0);
-            const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0);
-            return bDate - aDate;
+            const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt as any).getTime() : 0)
+            const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt as any).getTime() : 0)
+            return bDate - aDate
         }
-    });
+    })
 
     return (
         <div className="p-8 space-y-8">
@@ -194,13 +234,14 @@ export default function UsersPage() {
                         </SelectContent>
                     </Select>
                     <Select value={sortFilter} onValueChange={setSortFilter}>
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="w-[200px]">
                             <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="recent">Recent Joined</SelectItem>
                             <SelectItem value="alphabetical">Alphabetical (A-Z)</SelectItem>
-                            <SelectItem value="top">Top Bookings</SelectItem>
+                            <SelectItem value="rides_high">Rides: High → Low</SelectItem>
+                            <SelectItem value="rides_low">Rides: Low → High</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -220,6 +261,7 @@ export default function UsersPage() {
                             <TableHead>User</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Phone</TableHead>
+                            <TableHead>Location</TableHead>
                             <TableHead>Joined</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Total Rides</TableHead>
@@ -229,13 +271,13 @@ export default function UsersPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
+                                <TableCell colSpan={9} className="text-center h-24">
                                     Loading users...
                                 </TableCell>
                             </TableRow>
                         ) : filteredUsers.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
+                                <TableCell colSpan={9} className="text-center h-24">
                                     No users found for the selected filter.
                                 </TableCell>
                             </TableRow>
@@ -260,7 +302,24 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell>{userData.email || "N/A"}</TableCell>
                                     <TableCell>{userData.phoneNumber || "N/A"}</TableCell>
-                                    <TableCell>{new Date(userData.createdAt?.toDate?.() || Date.now()).toLocaleDateString()}</TableCell>
+                                    {/* Location */}
+                                    <TableCell>
+                                        {getLocationLabel(userData) ? (
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground max-w-[130px]">
+                                                <MapPin className="h-3 w-3 shrink-0 text-blue-500" />
+                                                <span className="truncate" title={userData.address}>{getLocationLabel(userData)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </TableCell>
+                                    {/* Joined Date+Time */}
+                                    <TableCell>
+                                        <div className="text-xs">
+                                            <div>{userData.createdAt?.toDate ? userData.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(userData.createdAt as any)?.toLocaleDateString('en-IN') || 'N/A'}</div>
+                                            <div className="text-muted-foreground">{userData.createdAt?.toDate ? userData.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}</div>
+                                        </div>
+                                    </TableCell>
                                     <TableCell>
                                         {userData.isBlocked ? (
                                             <Badge variant="destructive" className="gap-1">

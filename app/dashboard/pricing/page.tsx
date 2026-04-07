@@ -75,13 +75,13 @@ export default function PricingPage() {
         return (
             <div className="p-8">
                 <Button onClick={() => updateRates({
-                    commission_percent: 20,
-                    bike: { base_fare: 40, per_km: 9, night_charge: 10 },
-                    auto: { base_fare: 80, per_km: 16, night_charge: 20 },
-                    car: { base_fare: 150, per_km: 25, night_charge: 40 },
-                    erickshaw: { base_fare: 60, per_km: 13, night_charge: 15 },
-                    bigcar: { base_fare: 200, per_km: 30, night_charge: 50 },
-                    carriertruck: { base_fare: 250, per_km: 40, night_charge: 60 },
+                    commission_percent: 10,
+                    bike: { base_fare: 25, per_km: 6, night_charge: 10 },
+                    auto: { base_fare: 50, per_km: 10, night_charge: 20 },
+                    car: { base_fare: 80, per_km: 18, night_charge: 40 },
+                    erickshaw: { base_fare: 40, per_km: 8, night_charge: 15 },
+                    bigcar: { base_fare: 100, per_km: 20, night_charge: 50 },
+                    carriertruck: { base_fare: 200, per_km: 25, night_charge: 60 },
                 } as any)}>Initialize Pricing Config</Button>
             </div>
         )
